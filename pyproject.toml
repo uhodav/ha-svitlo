@@ -1,0 +1,48 @@
+[project]
+name = "ha-svitlo"
+version = "0.5.3"  # Remember to change this in the manifest.json
+description = "A Home Assistant integration that provides power outage schedules for Ukraine"
+readme = "README.md"
+requires-python = ">=3.13.2"  # Follows https://github.com/home-assistant/core/blob/dev/pyproject.toml
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "homeassistant>=2025.10.4",
+    "pre-commit-uv>=4.1.5",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.3",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.3.5"
+addopts = "-ra -q"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+
+[tool.coverage.run]
+source = ["custom_components/svitlo_yeah"]
+omit = [
+    "tests/*",
+    "custom_components/svitlo_yeah/__init__.py",
+    "custom_components/svitlo_yeah/calendar.py",
+    "custom_components/svitlo_yeah/config_flow.py",
+    "custom_components/svitlo_yeah/coordinator.py",
+    "custom_components/svitlo_yeah/entity.py",
+    "custom_components/svitlo_yeah/sensor.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+show_missing = true
+precision = 2
