@@ -4,7 +4,7 @@
 
 ```
 ha-svitlo/
-├── custom_components/svitlo_yeah/    # Main integration code
+├── custom_components/svitlo/    # Main integration code
 │   ├── translations/                 # Localization files
 │   ├── __init__.py                   # Integration setup and entry point
 │   ├── api.py                        # API client for energy provider data
@@ -34,7 +34,7 @@ ha-svitlo/
 
 ## Core Components
 
-### Integration Layer (`custom_components/svitlo_yeah/`)
+### Integration Layer (`custom_components/svitlo/`)
 - **__init__.py**: Entry point, handles integration setup, platform loading, and lifecycle management
 - **config_flow.py**: Implements Home Assistant's config flow for UI-based setup (region, provider, group selection)
 - **const.py**: Centralized constants including domain name, entity types, and configuration keys

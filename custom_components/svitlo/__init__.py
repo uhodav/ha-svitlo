@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.CALENDAR, Platform.SENSOR]
+PLATFORMS = [Platform.CALENDAR, Platform.SENSOR, Platform.BUTTON]
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:

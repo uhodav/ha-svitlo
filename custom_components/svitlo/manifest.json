@@ -1,5 +1,5 @@
 {
-  "domain": "svitlo_yeah",
+  "domain": "svitlo",
   "name": "Svitlo",
   "codeowners": ["@uhodav"],
   "config_flow": true,

@@ -18,6 +18,9 @@ from .coordinator.yasno import YasnoCoordinator
 from .entity import IntegrationEntity
 from .models import ConnectivityState
 
+from homeassistant.helpers.restore_state import RestoreEntity
+import datetime
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -117,6 +120,32 @@ SENSOR_TYPES: tuple[IntegrationSensorDescription, ...] = (
     ),
 )
 
+# Sensor for last schedule request time
+class LastScheduleRequestSensor(SensorEntity, RestoreEntity):
+    _attr_name = "Last Schedule Request"
+    _attr_icon = "mdi:clock"
+    _attr_unique_id = "last_schedule_request"
+    _attr_should_poll = False
+    _attr_entity_registry_enabled_default = True
+    _attr_entity_category = None
+
+    def __init__(self, coordinator: YasnoCoordinator):
+        super().__init__()
+        self._coordinator = coordinator
+        self._attr_native_value = None
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        self._coordinator.async_on_remove(self._coordinator.async_listen(self._handle_refresh))
+
+    async def _handle_refresh(self):
+        self._attr_native_value = datetime.datetime.now().isoformat()
+        self.async_write_ha_state()
+
+    @property
+    def state(self):
+        return self._attr_native_value
+
 
 async def async_setup_entry(
     hass: HomeAssistant,  # noqa: ARG001
@@ -126,9 +155,9 @@ async def async_setup_entry(
     """Set up the sensor platform."""
     LOGGER.debug("Setup new sensor: %s", config_entry)
     coordinator: YasnoCoordinator = config_entry.runtime_data
-    async_add_entities(
-        IntegrationSensor(coordinator, description) for description in SENSOR_TYPES
-    )
+    entities = [IntegrationSensor(coordinator, description) for description in SENSOR_TYPES]
+    entities.append(LastScheduleRequestSensor(coordinator))
+    async_add_entities(entities)
 
 
 class IntegrationSensor(IntegrationEntity, SensorEntity):

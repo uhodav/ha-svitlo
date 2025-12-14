@@ -61,6 +61,6 @@ Result: single range (12:30, 16:30)
 ```
 
 ### Implementation
-- Module: `custom_components/svitlo_yeah/api/dtek_regions.py`
+- Module: `custom_components/svitlo/api/dtek_regions.py`
 - Class: `DtekRegionAPI`
 - Methods: `fetch_data()`, `get_groups()`, `get_updated_on()`, `get_events()`, `_parse_group_hours()`

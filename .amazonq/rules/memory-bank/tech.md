@@ -32,7 +32,7 @@
 pytest
 
 # Run tests with coverage
-pytest --cov=custom_components/svitlo_yeah --cov-report=html
+pytest --cov=custom_components/svitlo --cov-report=html
 
 # Platform-specific coverage scripts
 script/coverage.sh   # Unix/Linux/macOS
