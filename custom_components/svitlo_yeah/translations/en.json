@@ -74,6 +74,12 @@
       }
     },
     "sensor": {
+      "force_update_schedule": {
+        "name": "Force Update Schedule",
+        "state": {
+          "default": "Trigger schedule refresh"
+        }
+      },
       "electricity": {
         "name": "Electricity",
         "state": {

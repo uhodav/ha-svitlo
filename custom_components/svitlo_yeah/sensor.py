@@ -9,6 +9,9 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorEntityDescription,
 )
+
+# Force update sensor
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.components.sensor.const import SensorDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -126,13 +129,34 @@ async def async_setup_entry(
     """Set up the sensor platform."""
     LOGGER.debug("Setup new sensor: %s", config_entry)
     coordinator: YasnoCoordinator = config_entry.runtime_data
-    async_add_entities(
-        IntegrationSensor(coordinator, description) for description in SENSOR_TYPES
-    )
+    entities = [IntegrationSensor(coordinator, description) for description in SENSOR_TYPES]
+    entities.append(ForceUpdateScheduleSensor(coordinator))
+    async_add_entities(entities)
 
 
 class IntegrationSensor(IntegrationEntity, SensorEntity):
     """Implementation of sensor entity."""
+
+
+# Новый сенсор для принудительного обновления графика
+class ForceUpdateScheduleSensor(CoordinatorEntity, SensorEntity):
+    _attr_has_entity_name = True
+    _attr_name = "Force Update Schedule"
+    _attr_icon = "mdi:refresh"
+    _attr_unique_id = "force_update_schedule"
+    _attr_should_poll = False
+
+    def __init__(self, coordinator: YasnoCoordinator):
+        super().__init__(coordinator)
+        self._coordinator = coordinator
+
+    @property
+    def state(self):
+        return None
+
+    async def async_update(self):
+        """Вызвать принудительное обновление графика."""
+        await self._coordinator.async_request_refresh()
 
     entity_description: IntegrationSensorDescription
 

@@ -10,6 +10,18 @@ A [Home Assistant][home-assistant] integration that tracks electricity outage sc
 
 Origin project https://github.com/ALERTua/ha-svitlo-yeah
 
+## Sensors
+
+### Force Update Schedule
+Sensor `force_update_schedule` allows you to manually trigger a schedule refresh. When you update this sensor (e.g., via Home Assistant UI or automation), it will force the integration to fetch the latest schedule from the provider.
+
+**Usage example:**
+```yaml
+service: homeassistant.update_entity
+target:
+	entity_id: sensor.force_update_schedule
+```
+
 ## Installation
 
 The quickest way to install this integration is via [HACS][hacs-url] by clicking the button below:
