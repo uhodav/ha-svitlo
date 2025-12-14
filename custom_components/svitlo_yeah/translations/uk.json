@@ -74,6 +74,12 @@
       }
     },
     "sensor": {
+      "force_update_schedule": {
+        "name": "Примусове оновлення графіка",
+        "state": {
+          "default": "Оновити графік вручну"
+        }
+      },
       "electricity": {
         "name": "Електрика",
         "state": {
