@@ -5,7 +5,7 @@ from typing import Final
 # Do not commit as True
 DEBUG: Final = False
 
-DOMAIN: Final = "svitlo_yeah"
+DOMAIN: Final = "svitlo"
 NAME: Final = "Svitlo"
 
 # Configuration option
@@ -43,13 +43,13 @@ BLOCK_KEY_STATUS: Final = "status"
 
 # Keys
 TRANSLATION_KEY_EVENT_PLANNED_OUTAGE: Final = (
-    "component.svitlo_yeah.common.event_name_planned_outage"
+    "component.svitlo.common.event_name_planned_outage"
 )
 TRANSLATION_KEY_EVENT_EMERGENCY_OUTAGE: Final = (
-    "component.svitlo_yeah.common.event_name_emergency_outage"
+    "component.svitlo.common.event_name_emergency_outage"
 )
 TRANSLATION_KEY_TIME_LESS_THAN_MINUTE: Final = (
-    "component.svitlo_yeah.common.time_less_than_minute"
+    "component.svitlo.common.time_less_than_minute"
 )
 
 # Device

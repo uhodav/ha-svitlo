@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from homeassistant.util import dt as dt_utils
 
-from custom_components.svitlo_yeah.api.dtek import (
+from custom_components.svitlo.api.dtek import (
     DtekAPI,
     _parse_group_hours,
 )
@@ -103,7 +103,7 @@ class TestDtekRegionAPIFetchData:
     async def test_fetch_data_success(self, api, sample_html):
         """Test successful data fetch."""
         with patch(
-            "custom_components.svitlo_yeah.api.dtek.aiohttp.ClientSession"
+            "custom_components.svitlo.api.dtek.aiohttp.ClientSession"
         ) as mock_session_class:
             mock_response = AsyncMock()
             mock_response.text = AsyncMock(return_value=sample_html)

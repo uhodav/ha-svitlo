@@ -7,12 +7,12 @@ import aiohttp
 import pytest
 from homeassistant.util import dt as dt_utils
 
-from custom_components.svitlo_yeah.api import YasnoApi
-from custom_components.svitlo_yeah.api.yasno import (
+from custom_components.svitlo.api import YasnoApi
+from custom_components.svitlo.api.yasno import (
     _minutes_to_time,
     _parse_day_schedule,
 )
-from custom_components.svitlo_yeah.models import PlannedOutageEventType
+from custom_components.svitlo.models import PlannedOutageEventType
 
 TEST_REGION_ID = 25
 TEST_PROVIDER_ID = 902
