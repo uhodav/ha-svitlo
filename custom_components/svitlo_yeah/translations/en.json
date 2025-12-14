@@ -1,0 +1,134 @@
+{
+  "title": "Svitlo Yeah!",
+  "config": {
+    "abort": {
+      "dtek_scraping_fail": "Error accessing the DTEK website\nIf you are certain the site is operational, the issue is due to the website's anti-data scraping protection (Incapsula Imperva anti-bot system).\n\nCollecting data on DTEK outages is a complex process because of this anti-bot system.\nI can try to bypass the anti-bot system only through third-party specialized services.\nSuch a service costs ~2.5 EUR per 1,000 requests (e.g., https://hypersolutions.co/pricing).\n\nIf the page on my cache server updates every 30 minutes, the maximum cost would be around 2.5 EUR for ~20 days.\nOne obtained cookie might be reusable, so the actual cost could be lower (or significantly lower).\n\nIf someone is interested in this, I could implement it myself—I would only need an API key for the relevant service.\nTelegram: @ALERTua"
+    },
+    "step": {
+      "user": {
+        "title": "Settings",
+        "data": {
+          "region": "Please select your region:"
+        },
+        "data_description": {
+        }
+      },
+      "provider": {
+        "title": "Settings",
+        "data": {
+          "provider": "Please select your provider:"
+        }
+      },
+      "group": {
+        "title": "Settings",
+        "data": {
+          "group": "Please select your group:"
+        },
+        "data_description": {
+          "group": "You can find your group at: https://static.yasno.ua/kyiv/outages"
+        }
+      },
+      "dtek_group": {
+        "title": "Settings",
+        "data": {
+          "group": "Please select your group:"
+        },
+        "data_description": {
+          "group": "Find your group at: https://www.dtek-krem.com.ua/ua/shutdowns"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Settings",
+        "data": {
+          "update_interval": "Update interval (minutes)"
+        },
+        "data_description": {
+          "update_interval": "How often to check for new outage data. Lower values mean more frequent updates but higher resource usage."
+        }
+      }
+    }
+  },
+  "device": {
+    "device_name_yasno": {
+      "name": "{region} {provider} {group}"
+    },
+    "device_name_dtek": {
+      "name": "Oblast {group}"
+    }
+  },
+  "selector": {
+    "region": {
+      "options": {
+        "region_dtek": "Oblast"
+      }
+    }
+  },
+  "entity": {
+    "calendar": {
+      "calendar": {
+        "name": "Planned Outages Calendar"
+      }
+    },
+    "sensor": {
+      "electricity": {
+        "name": "Electricity",
+        "state": {
+          "normal": "Connected",
+          "planned_outage": "Planned Outage",
+          "emergency": "Emergency Outage"
+        }
+      },
+      "schedule_updated_on": {
+        "name": "Schedule Updated On"
+      },
+      "next_planned_outage": {
+        "name": "Next Planned Outage"
+      },
+      "next_connectivity": {
+        "name": "Next Connectivity"
+      },
+      "next_planned_reconnection": {
+        "name": "Next Planned Reconnection"
+      },
+      "next_planned_outage_duration": {
+        "name": "Next Planned Outage Duration"
+      },
+      "current_day_status": {
+        "name": "Today's Schedule Status",
+        "state": {
+          "ScheduleApplies": "Planned Schedule Active",
+          "EmergencyShutdowns": "Emergency Shutdowns"
+        }
+      },
+      "next_outage_type": {
+        "name": "Next Outage Type",
+        "state": {
+          "Definite": "Planned",
+          "Emergency": "Emergency",
+          "NotPlanned": "None"
+        }
+      },
+      "time_until_connectivity": {
+        "name": "Time Until Power Restored"
+      },
+      "time_until_outage": {
+        "name": "Time Until Outage"
+      },
+      "next_planned_outage_start_time": {
+        "name": "Next Outage Start Time"
+      },
+      "next_planned_outage_end_time": {
+        "name": "Outage End Time"
+      }
+    }
+  },
+  "common": {
+    "event_name_planned_outage": "Planned Outage",
+    "event_name_emergency_outage": "Emergency Outage",
+    "time_less_than_minute": "less than a minute"
+  }
+}

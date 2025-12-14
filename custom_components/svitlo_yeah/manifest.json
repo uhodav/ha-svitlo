@@ -1,0 +1,11 @@
+{
+  "domain": "svitlo_yeah",
+  "name": "Svitlo",
+  "codeowners": ["@uhodav"],
+  "config_flow": true,
+  "documentation": "https://github.com/uhodav/ha-svitlo",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/uhodav/ha-svitlo/issues",
+  "requirements": [],
+  "version": "0.5.3"
+}
