@@ -112,15 +112,33 @@ SENSOR_TYPES: tuple[IntegrationSensorDescription, ...] = (
         icon="mdi:clock-outline",
         val_func=lambda coordinator: coordinator.time_until_connectivity,
     ),
+
     IntegrationSensorDescription(
         key="time_until_outage",
         translation_key="time_until_outage",
         icon="mdi:clock-alert-outline",
         val_func=lambda coordinator: coordinator.time_until_outage,
     ),
+    IntegrationSensorDescription(
+        key="last_schedule_request",
+        translation_key="last_schedule_request",
+        icon="mdi:clock",
+        val_func=lambda coordinator: _format_last_schedule_request(getattr(coordinator, "last_schedule_request_time", None)),
+    ),
 )
 
+def _format_last_schedule_request(dt_str):
+    if not dt_str:
+        return None
+    try:
+        dt = datetime.datetime.fromisoformat(dt_str)
+        return dt.strftime("%d.%m.%Y %H:%M")
+    except Exception:
+        return dt_str
+
 # Sensor for last schedule request time
+
+# Сенсор времени последнего обновления графика
 class LastScheduleRequestSensor(SensorEntity, RestoreEntity):
     _attr_name = "Last Schedule Request"
     _attr_icon = "mdi:clock"
@@ -133,12 +151,20 @@ class LastScheduleRequestSensor(SensorEntity, RestoreEntity):
         super().__init__()
         self._coordinator = coordinator
         self._attr_native_value = None
+        self._unsub = None
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
-        self._coordinator.async_on_remove(self._coordinator.async_listen(self._handle_refresh))
+        # Подписка на обновления coordinator
+        if hasattr(self._coordinator, "async_add_listener"):
+            self._unsub = self._coordinator.async_add_listener(self._handle_refresh)
 
-    async def _handle_refresh(self):
+    async def async_will_remove_from_hass(self):
+        if self._unsub:
+            self._unsub()
+        await super().async_will_remove_from_hass()
+
+    def _handle_refresh(self):
         self._attr_native_value = datetime.datetime.now().isoformat()
         self.async_write_ha_state()
 
