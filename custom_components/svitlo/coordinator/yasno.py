@@ -58,6 +58,7 @@ class YasnoCoordinator(DataUpdateCoordinator):
         self.hass = hass
         self._config_entry = config_entry
         self.translations = {}
+        self.last_schedule_request_time = None
 
         # Get configuration values
         self.region = config_entry.options.get(
@@ -159,7 +160,10 @@ class YasnoCoordinator(DataUpdateCoordinator):
             )
 
         # Fetch outages data (now async with aiohttp, not blocking)
+
         await self.api.fetch_data()
+        # Сохраняем время последнего обновления
+        self.last_schedule_request_time = datetime.datetime.now().isoformat()
 
         # Invalidate cache when we fetch new data
         self._cached_group_data = None
