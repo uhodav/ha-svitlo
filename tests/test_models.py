@@ -4,7 +4,7 @@ import datetime
 
 import pytest
 
-from custom_components.svitlo.models import (
+from custom_components.svitlo_kyiv.models import (
     ConnectivityState,
     PlannedOutageEvent,
     PlannedOutageEventType,

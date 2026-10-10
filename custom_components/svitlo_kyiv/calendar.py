@@ -3,13 +3,15 @@
 import datetime
 import logging
 
-from homeassistant.components.calendar import CalendarEntity, CalendarEvent
+from homeassistant.components.calendar import (
+    CalendarEntity,
+    CalendarEntityDescription,
+    CalendarEvent,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .coordinator.dtek import DtekCoordinator
 from .coordinator.yasno import YasnoCoordinator
 from .entity import IntegrationEntity
 
@@ -23,26 +25,22 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Svitlo Yeah calendar platform."""
     LOGGER.debug("Setup new entry: %s", config_entry)
-    coordinator: YasnoCoordinator | DtekCoordinator = config_entry.runtime_data
+    coordinator: YasnoCoordinator = config_entry.runtime_data
     async_add_entities([PlannedOutagesCalendar(coordinator)])
 
 
 class PlannedOutagesCalendar(IntegrationEntity, CalendarEntity):
     """Implementation of the Planned Outages Calendar entity."""
 
+    entity_description: CalendarEntityDescription
+
     def __init__(
         self,
-        coordinator: YasnoCoordinator | DtekCoordinator,
+        coordinator: YasnoCoordinator,
     ) -> None:
         """Initialize the Planned Outages Calendar entity."""
         super().__init__(coordinator)
-        self.entity_id = (
-            f"calendar.planned_outages"
-            f"_{coordinator.region_name}"
-            f"_{coordinator.provider_name}"
-            f"_{coordinator.group}"
-        )
-        self.entity_description = EntityDescription(
+        self.entity_description = CalendarEntityDescription(
             key="calendar",
             name="Calendar",
             translation_key="calendar",

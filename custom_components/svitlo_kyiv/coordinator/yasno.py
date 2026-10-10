@@ -1,15 +1,18 @@
 """Coordinator for Svitlo Yeah integration."""
 
+import asyncio
 import datetime
 import logging
 
 from homeassistant.components.calendar import CalendarEvent
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_utils
 
+from ..api.outage_data_ua import OutageDataUaApi
 from ..api.yasno import YasnoApi
 from ..const import (
     CONF_GROUP,
@@ -54,9 +57,9 @@ class YasnoCoordinator(DataUpdateCoordinator):
             LOGGER,
             name=DOMAIN,
             update_interval=datetime.timedelta(minutes=update_interval_minutes),
+            config_entry=config_entry,
         )
         self.hass = hass
-        self._config_entry = config_entry
         self.translations = {}
         self.last_schedule_request_time = None
 
@@ -110,6 +113,22 @@ class YasnoCoordinator(DataUpdateCoordinator):
         self._cached_group_data = None
         self._group_data_cache_time = None
 
+        # Last known schedule per day survives restarts (used during emergency)
+        self._slots_store = Store(
+            hass, 1, f"{DOMAIN}.{config_entry.entry_id}.known_slots"
+        )
+        self._slots_loaded = False
+
+        # When the schedule content really changed (survives restarts)
+        self._changed_store = Store(
+            hass, 1, f"{DOMAIN}.{config_entry.entry_id}.schedule_changed"
+        )
+        self._schedule: dict[str, list[str]] = {}
+        self.schedule_data_changed_on: datetime.datetime | None = None
+
+        # Second schedule source for regions that outage-data-ua has (Kyiv)
+        self.alt_api = OutageDataUaApi.for_region(self.region, str(self.group))
+
         # Initialize API and resolve IDs
         self.api = YasnoApi()
         # Note: We'll resolve IDs and update API during first data update
@@ -161,13 +180,58 @@ class YasnoCoordinator(DataUpdateCoordinator):
 
         # Fetch outages data (now async with aiohttp, not blocking)
 
-        await self.api.fetch_data()
+        if not self._slots_loaded:
+            self.api.known_slots = await self._slots_store.async_load() or {}
+            changed = await self._changed_store.async_load() or {}
+            self._schedule = changed.get("schedule") or {}
+            self.schedule_data_changed_on = dt_utils.parse_datetime(
+                changed.get("changed_on") or ""
+            )
+            self._slots_loaded = True
+
+        # Yasno and the second source (DTEK website copy) together
+        if self.alt_api:
+            await asyncio.gather(self.api.fetch_data(), self.alt_api.fetch_data())
+            self.api.set_alternative(
+                self.alt_api.get_days(), self.alt_api.get_updated_on()
+            )
+        else:
+            await self.api.fetch_data()
         # Сохраняем время последнего обновления
         self.last_schedule_request_time = datetime.datetime.now().isoformat()
+
+        if self.api.remember_slots():
+            await self._slots_store.async_save(self.api.known_slots)
+
+        await self._track_schedule_change()
 
         # Invalidate cache when we fetch new data
         self._cached_group_data = None
         self._group_data_cache_time = None
+
+    async def _track_schedule_change(self) -> None:
+        """Remember when the planned outages of today and later changed."""
+        if self.api._get_group_data() is None:  # noqa: SLF001
+            return  # no data yet - nothing to compare
+        today = dt_utils.now().date()
+        schedule = self.api.get_schedule_by_day(today)
+        previous = {
+            day: outages
+            for day, outages in self._schedule.items()
+            if day >= today.isoformat()
+        }
+        if schedule == previous and self.schedule_data_changed_on:
+            return
+        if schedule != previous:
+            LOGGER.debug("Schedule changed: %s -> %s", previous, schedule)
+        self._schedule = schedule
+        self.schedule_data_changed_on = dt_utils.now()
+        await self._changed_store.async_save(
+            {
+                "schedule": schedule,
+                "changed_on": self.schedule_data_changed_on.isoformat(),
+            }
+        )
 
     async def async_fetch_translations(self) -> None:
         """Fetch translations."""

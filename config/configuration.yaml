@@ -11,4 +11,4 @@ debugpy:
 logger:
   default: info
   logs:
-    custom_components.svitlo: debug
+    custom_components.svitlo_kyiv: debug

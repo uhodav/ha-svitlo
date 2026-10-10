@@ -14,6 +14,7 @@ from ..const import (
     PLANNED_OUTAGES_ENDPOINT,
     REGIONS_ENDPOINT,
 )
+from .outage_data_ua import KYIV_TZ
 from ..models import (
     PlannedOutageEvent,
     PlannedOutageEventType,
@@ -132,6 +133,15 @@ class YasnoApi:
         self.group = group
         self.regions_data = None
         self.planned_outage_data = None
+        # Last known schedule slots per day ("YYYY-MM-DD" -> slots). Emergency
+        # shutdowns come with empty slots, but they are only a flag: the planned
+        # schedule for the day still applies.
+        self.known_slots: dict[str, list[dict]] = {}
+        # Second source (DTEK website copy): slots per day and its update time
+        self.alt_days: dict[str, list[dict]] = {}
+        self.alt_updated_on: datetime.datetime | None = None
+        # Which source gave the schedule of each day: yasno / dtek / known
+        self.day_sources: dict[str, str] = {}
 
     async def _get_route_data(
         self,
@@ -144,6 +154,8 @@ class YasnoApi:
             async with session.get(
                 url,
                 timeout=aiohttp.ClientTimeout(total=timeout_secs),
+                # Ask intermediate caches for the current schedule
+                headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
             ) as response:
                 response.raise_for_status()
                 return await response.json()
@@ -179,7 +191,10 @@ class YasnoApi:
             dso_id=self.provider_id,
         )
         async with aiohttp.ClientSession() as session:
-            self.planned_outage_data = await self._get_route_data(session, url)
+            data = await self._get_route_data(session, url)
+        # On a request error keep the last received schedule
+        if data is not None:
+            self.planned_outage_data = data
 
         # DEBUG. DO NOT COMMIT UNCOMMENTED!
         """
@@ -298,6 +313,45 @@ class YasnoApi:
         return self.planned_outage_data[self.group]
 
     def get_updated_on(self) -> datetime.datetime | None:
+        """When the schedule in use was updated (the latest of the sources)."""
+        times = [t for t in (self.get_yasno_updated_on(), self.alt_updated_on) if t]
+        return max(times) if times else None
+
+    def set_alternative(
+        self, days: dict[str, list[dict]], updated_on: datetime.datetime | None
+    ) -> None:
+        """Set the schedule of the second source (DTEK website copy)."""
+        self.alt_days = days
+        self.alt_updated_on = dt_utils.as_local(updated_on) if updated_on else None
+
+    def _choose_slots(
+        self, day: str, status: str | None, slots: list[dict]
+    ) -> tuple[list[dict], str]:
+        """
+        Pick the schedule of a day: (slots, source).
+
+        The second source wins when Yasno has no schedule for the day (empty
+        slots, e.g. during emergency shutdowns) or when it was updated later.
+        Without both, the last known schedule of the day is used.
+        """
+        alt = self.alt_days.get(day)
+        yasno_updated = self.get_yasno_updated_on()
+        if alt is not None and (
+            not slots
+            or (
+                self.alt_updated_on
+                and yasno_updated
+                and self.alt_updated_on > yasno_updated
+            )
+        ):
+            return alt, "dtek"
+        if slots:
+            return slots, "yasno"
+        if status == YasnoPlannedOutageDayStatus.STATUS_EMERGENCY_SHUTDOWNS.value:
+            return self.known_slots.get(day, []), "known"
+        return [], "yasno"
+
+    def get_yasno_updated_on(self) -> datetime.datetime | None:
         """Get the updated on timestamp for the configured group."""
         group_data = self._get_group_data()
         if not group_data or "updatedOn" not in group_data:
@@ -336,6 +390,8 @@ class YasnoApi:
         LOGGER.debug("Group data for %s: %s", self.group, group_data)
 
         events = []
+        self.day_sources = {}
+        yasno_days = set()
         for key, day_data in group_data.items():
             # parse only "today" and "tomorrow"
             if key == "updatedOn" or not isinstance(day_data, dict):
@@ -350,9 +406,13 @@ class YasnoApi:
                 continue
 
             status = day_data.get(BLOCK_KEY_STATUS)
-            if status == YasnoPlannedOutageDayStatus.STATUS_SCHEDULE_APPLIES.value:
-                events.extend(_parse_day_schedule(day_data, day_dt))
-            elif status == YasnoPlannedOutageDayStatus.STATUS_EMERGENCY_SHUTDOWNS.value:
+            day = day_dt.date().isoformat()
+            yasno_days.add(day)
+            # Emergency is only a flag - the planned schedule of the day stays
+            slots, self.day_sources[day] = self._choose_slots(
+                day, status, day_data.get("slots") or []
+            )
+            if status == YasnoPlannedOutageDayStatus.STATUS_EMERGENCY_SHUTDOWNS.value:
                 """
                 {
                     "3.1": {
@@ -378,16 +438,26 @@ class YasnoApi:
                         event_type=PlannedOutageEventType.EMERGENCY,
                     )
                 )
-            else:
-                # Handle WaitingForSchedule and other status values
-                # WaitingForSchedule still contains schedule data, parse it
-                events.extend(_parse_day_schedule(day_data, day_dt))
+            # ScheduleApplies, WaitingForSchedule (still contains schedule data)
+            # and the planned schedule behind the emergency flag
+            events.extend(_parse_day_schedule({"slots": slots}, day_dt))
 
+        # Days that only the second source has (e.g. tomorrow published earlier)
+        for day, slots in self.alt_days.items():
+            if day in yasno_days:
+                continue
+            day_dt = datetime.datetime.combine(
+                datetime.date.fromisoformat(day),
+                datetime.time.min,
+                tzinfo=KYIV_TZ,
+            )
+            self.day_sources[day] = "dtek"
+            events.extend(_parse_day_schedule({"slots": slots}, day_dt))
+
+        # By day; within a day the all-day (emergency) flag first, then by time
         events.sort(
             key=lambda e: (
-                datetime.datetime.combine(e.start, datetime.time.min)
-                if isinstance(e.start, datetime.date)
-                else e.start
+                (e.start, 0, 0.0) if e.all_day else (e.start.date(), 1, e.start.timestamp())
             )
         )
 
@@ -396,6 +466,61 @@ class YasnoApi:
             for e in events
             if e.all_day or not (e.end <= start_date or e.start >= end_date)
         ]
+
+    def get_schedule_by_day(self, today: datetime.date) -> dict[str, list[str]]:
+        """
+        Planned outages of today and later: {"YYYY-MM-DD": ["HH:MM-HH:MM", ...]}.
+
+        Used to detect a real change of the schedule (not just a new response).
+        """
+        start = datetime.datetime.combine(today, datetime.time.min, tzinfo=KYIV_TZ)
+        schedule: dict[str, list[str]] = {}
+        for event in self.get_events(start, start + datetime.timedelta(days=2)):
+            if event.all_day or event.event_type != PlannedOutageEventType.DEFINITE:
+                continue
+            day = event.start.date()
+            if day < today:
+                continue
+            end = event.end.strftime("%H:%M")
+            if event.end.date() != day or end == "23:59":
+                end = "24:00"
+            schedule.setdefault(day.isoformat(), []).append(
+                f"{event.start.strftime('%H:%M')}-{end}"
+            )
+        return schedule
+
+    def remember_slots(self, today: datetime.date | None = None) -> bool:
+        """
+        Remember the schedule slots of each day for emergency shutdowns.
+
+        Returns True if the known slots changed.
+        """
+        group_data = self._get_group_data() or {}
+        known = dict(self.known_slots)
+        for key, day_data in group_data.items():
+            if key == "updatedOn" or not isinstance(day_data, dict):
+                continue
+            day_dt = dt_utils.parse_datetime(day_data.get("date") or "")
+            if not day_dt:
+                continue
+            day = day_dt.date().isoformat()
+            slots, _ = self._choose_slots(
+                day, day_data.get(BLOCK_KEY_STATUS), day_data.get("slots") or []
+            )
+            if slots:
+                known[day] = slots
+        for day, slots in self.alt_days.items():
+            known.setdefault(day, slots)
+
+        # Keep only today and later
+        today = today or dt_utils.now().date()
+        known = {
+            day: slots for day, slots in known.items() if day >= today.isoformat()
+        }
+
+        changed = known != self.known_slots
+        self.known_slots = known
+        return changed
 
     async def fetch_data(self) -> None:
         """Fetch all required data."""

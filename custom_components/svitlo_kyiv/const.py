@@ -5,8 +5,10 @@ from typing import Final
 # Do not commit as True
 DEBUG: Final = False
 
-DOMAIN: Final = "svitlo"
-NAME: Final = "Svitlo"
+DOMAIN: Final = "svitlo_kyiv"
+# Domain of this integration before the rename; its entry is migrated
+OLD_DOMAIN: Final = "svitlo"
+NAME: Final = "Svitlo Kyiv"
 
 # Configuration option
 CONF_REGION: Final = "region"
@@ -14,13 +16,14 @@ CONF_PROVIDER: Final = "provider"
 CONF_GROUP: Final = "group"
 CONF_PROVIDER_TYPE: Final = "provider_type"
 CONF_UPDATE_INTERVAL: Final = "update_interval"
+# Entry id of the old "svitlo" entry whose entities are moved to this entry
+CONF_MIGRATED_FROM: Final = "migrated_from"
 
 # Provider types
 PROVIDER_TYPE_YASNO: Final = "yasno"
-PROVIDER_TYPE_DTEK: Final = "dtek"
 
-# Special region identifier for Regions
-REGION_SELECTION_DTEK_KEY: Final = "region_dtek"
+# The only supported region (Yasno region name)
+KYIV_REGION: Final = "Київ"
 
 # Provider name simplification
 PROVIDER_DTEK_FULL: Final = "ДТЕК КИЇВСЬКІ ЕЛЕКТРОМЕРЕЖІ"
@@ -29,7 +32,7 @@ PROVIDER_DTEK_SHORT: Final = "ДТЕК"
 # Consts
 UPDATE_INTERVAL: Final = 15
 DEFAULT_UPDATE_INTERVAL: Final = 15
-MIN_UPDATE_INTERVAL: Final = 5
+MIN_UPDATE_INTERVAL: Final = 1
 MAX_UPDATE_INTERVAL: Final = 30
 
 # API Endpoints
@@ -43,25 +46,18 @@ BLOCK_KEY_STATUS: Final = "status"
 
 # Keys
 TRANSLATION_KEY_EVENT_PLANNED_OUTAGE: Final = (
-    "component.svitlo.common.event_name_planned_outage"
+    "component.svitlo_kyiv.common.event_name_planned_outage"
 )
 TRANSLATION_KEY_EVENT_EMERGENCY_OUTAGE: Final = (
-    "component.svitlo.common.event_name_emergency_outage"
+    "component.svitlo_kyiv.common.event_name_emergency_outage"
 )
 TRANSLATION_KEY_TIME_LESS_THAN_MINUTE: Final = (
-    "component.svitlo.common.time_less_than_minute"
+    "component.svitlo_kyiv.common.time_less_than_minute"
 )
 
 # Device
 DEVICE_NAME_YASNO_TRANSLATION_KEY = "device_name_yasno"
-DEVICE_NAME_DTEK_TRANSLATION_KEY = "device_name_dtek"
-DEVICE_MANUFACTURER = NAME
 
-DTEK_HEADERS = {
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "uk,en-US;q=0.8,en;q=0.5,ru;q=0.3",
-    "Accept-Encoding": "gzip, deflate, br, zstd",
-    "Referer": "https://www.google.com/",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101"
-    " Firefox/144.0",
-}
+# unique_id of the Update schedule button before it was attached to the device
+LEGACY_BUTTON_UNIQUE_ID: Final = "update_schedule_button"
+DEVICE_MANUFACTURER = NAME

@@ -45,7 +45,7 @@ SENSOR_TYPES: tuple[IntegrationSensorDescription, ...] = (
         translation_key="current_day_status",
         icon="mdi:calendar-today",
         device_class=SensorDeviceClass.ENUM,
-        options=["ScheduleApplies", "EmergencyShutdowns"],
+        options=["ScheduleApplies", "EmergencyShutdowns", "NoOutages"],
         val_func=lambda coordinator: coordinator.current_day_status,
     ),
     IntegrationSensorDescription(
@@ -63,6 +63,13 @@ SENSOR_TYPES: tuple[IntegrationSensorDescription, ...] = (
         icon="mdi:update",
         device_class=SensorDeviceClass.TIMESTAMP,
         val_func=lambda coordinator: coordinator.schedule_updated_on,
+    ),
+    IntegrationSensorDescription(
+        key="schedule_data_changed_on",
+        translation_key="schedule_data_changed_on",
+        icon="mdi:calendar-edit",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        val_func=lambda coordinator: coordinator.schedule_data_changed_on,
     ),
     IntegrationSensorDescription(
         key="next_planned_outage",
@@ -238,4 +245,6 @@ class IntegrationSensor(IntegrationEntity, SensorEntity):
             "event_start": current_event.start if current_event else None,
             "event_end": current_event.end if current_event else None,
             "supported_states": self.options,
+            # Source of the schedule of each day: yasno / dtek / known
+            "schedule_sources": dict(getattr(self.coordinator.api, "day_sources", {})),
         }

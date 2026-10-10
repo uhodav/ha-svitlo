@@ -1,40 +1,30 @@
 {
-  "title": "Svitlo",
+  "title": "Svitlo Kyiv",
   "config": {
     "abort": {
-      "dtek_scraping_fail": "Error accessing the DTEK website\nIf you are certain the site is operational, the issue is due to the website's anti-data scraping protection (Incapsula Imperva anti-bot system).\n\nCollecting data on DTEK outages is a complex process because of this anti-bot system.\nI can try to bypass the anti-bot system only through third-party specialized services.\nSuch a service costs ~2.5 EUR per 1,000 requests (e.g., https://hypersolutions.co/pricing).\n\nIf the page on my cache server updates every 30 minutes, the maximum cost would be around 2.5 EUR for ~20 days.\nOne obtained cookie might be reusable, so the actual cost could be lower (or significantly lower).\n\nIf someone is interested in this, I could implement it myself—I would only need an API key for the relevant service.\nTelegram: @ALERTua"
+      "cannot_connect": "Failed to get the Kyiv groups from Yasno. Try again later."
     },
     "step": {
       "user": {
-        "title": "Settings",
-        "data": {
-          "region": "Please select your region:"
-        },
-        "data_description": {
+        "title": "Svitlo Kyiv",
+        "description": "The integration «Svitlo» (svitlo) of Kyiv was renamed to «Svitlo Kyiv». Move it to keep the entity ids, history and automations.",
+        "menu_options": {
+          "migrate": "Move the existing «Svitlo» entry",
+          "group": "Add a new group"
         }
       },
-      "provider": {
-        "title": "Settings",
-        "data": {
-          "provider": "Please select your provider:"
-        }
+      "migrate": {
+        "title": "Move «{title}» (group {group})",
+        "description": "Settings and entities of the old entry move to «Svitlo Kyiv» with the same entity ids. The old entry is removed afterwards.\n\nBefore that, remove the folder custom_components/svitlo (or disable the old entry) and restart Home Assistant, otherwise the entities cannot be moved."
       },
       "group": {
-        "title": "Settings",
+        "title": "Kyiv: outage group",
+        "description": "Schedules of Kyiv (DTEK Kyiv grids) from Yasno and the DTEK website.",
         "data": {
-          "group": "Please select your group:"
+          "group": "Select your group:"
         },
         "data_description": {
-          "group": "You can find your group at: https://static.yasno.ua/kyiv/outages"
-        }
-      },
-      "dtek_group": {
-        "title": "Settings",
-        "data": {
-          "group": "Please select your group:"
-        },
-        "data_description": {
-          "group": "Find your group at: https://www.dtek-krem.com.ua/ua/shutdowns"
+          "group": "Find your group at https://static.yasno.ua/kyiv/outages or https://www.dtek-kem.com.ua/ua/shutdowns"
         }
       }
     }
@@ -47,7 +37,7 @@
           "update_interval": "Update interval (minutes)"
         },
         "data_description": {
-          "update_interval": "How often to check for new outage data. Lower values mean more frequent updates but higher resource usage."
+          "update_interval": "How often to check for new outage data (1-30 minutes). Yasno publishes changes at any time; 2-5 minutes is a good balance. The schedule can also be requested right away with the Update schedule button."
         }
       }
     }
@@ -55,16 +45,6 @@
   "device": {
     "device_name_yasno": {
       "name": "{region} {provider} {group}"
-    },
-    "device_name_dtek": {
-      "name": "Oblast {group}"
-    }
-  },
-  "selector": {
-    "region": {
-      "options": {
-        "region_dtek": "Oblast"
-      }
     }
   },
   "entity": {
@@ -101,7 +81,8 @@
         "name": "Today's Schedule Status",
         "state": {
           "ScheduleApplies": "Planned Schedule Active",
-          "EmergencyShutdowns": "Emergency Shutdowns"
+          "EmergencyShutdowns": "Emergency Shutdowns",
+          "NoOutages": "No Outages"
         }
       },
       "next_outage_type": {
@@ -123,6 +104,14 @@
       },
       "next_planned_outage_end_time": {
         "name": "Outage End Time"
+      },
+      "schedule_data_changed_on": {
+        "name": "Schedule data changed on"
+      }
+    },
+    "button": {
+      "update_schedule": {
+        "name": "Update schedule"
       }
     }
   },

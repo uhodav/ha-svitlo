@@ -1,0 +1,123 @@
+{
+  "title": "Svitlo Kyiv",
+  "config": {
+    "abort": {
+      "cannot_connect": "Не вдалося отримати групи Києва з Yasno. Спробуйте пізніше."
+    },
+    "step": {
+      "user": {
+        "title": "Svitlo Kyiv",
+        "description": "Інтеграцію «Svitlo» (svitlo) для Києва перейменовано на «Svitlo Kyiv». Перенесіть її, щоб зберегти ідентифікатори сутностей, історію та автоматизації.",
+        "menu_options": {
+          "migrate": "Перенести наявний запис «Svitlo»",
+          "group": "Додати нову групу"
+        }
+      },
+      "migrate": {
+        "title": "Перенесення «{title}» (група {group})",
+        "description": "Налаштування та сутності старого запису переносяться в «Svitlo Kyiv» з тими самими ідентифікаторами. Після цього старий запис видаляється.\n\nПеред цим видаліть теку custom_components/svitlo (або вимкніть старий запис) і перезапустіть Home Assistant, інакше сутності не вдасться перенести."
+      },
+      "group": {
+        "title": "Київ: група відключень",
+        "description": "Графіки Києва (ДТЕК Київські електромережі) з Yasno та сайту ДТЕК.",
+        "data": {
+          "group": "Оберіть свою групу:"
+        },
+        "data_description": {
+          "group": "Знайдіть свою групу на https://static.yasno.ua/kyiv/outages або https://www.dtek-kem.com.ua/ua/shutdowns"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Налаштування",
+        "data": {
+          "update_interval": "Інтервал оновлення (хвилини)"
+        },
+        "data_description": {
+          "update_interval": "Як часто перевіряти нові дані про відключення (1-30 хвилин). Yasno публікує зміни будь-коли; 2-5 хвилин - оптимально. Графік також можна запросити одразу кнопкою «Оновити графік»."
+        }
+      }
+    }
+  },
+  "device": {
+    "device_name_yasno": {
+      "name": "{region} {provider} {group}"
+    }
+  },
+  "entity": {
+    "calendar": {
+      "calendar": {
+        "name": "Графік планових відключень"
+      }
+    },
+    "sensor": {
+      "electricity": {
+        "name": "Електрика",
+        "state": {
+          "normal": "Заживлено",
+          "planned_outage": "Планове відключення",
+          "emergency": "Екстрене відключення"
+        }
+      },
+      "schedule_updated_on": {
+        "name": "Графік оновлено"
+      },
+      "next_planned_outage": {
+        "name": "Наступне планове відключення"
+      },
+      "next_connectivity": {
+        "name": "Наступне відновлення"
+      },
+      "next_planned_reconnection": {
+        "name": "Наступне планове включення"
+      },
+      "next_planned_outage_duration": {
+        "name": "Тривалість планового відключення"
+      },
+      "current_day_status": {
+        "name": "Статус графіка на сьогодні",
+        "state": {
+          "ScheduleApplies": "Плановий графік діє",
+          "EmergencyShutdowns": "Екстрені відключення",
+          "NoOutages": "Немає відключень"
+        }
+      },
+      "next_outage_type": {
+        "name": "Тип наступного відключення",
+        "state": {
+          "Definite": "Планове",
+          "Emergency": "Екстрене",
+          "NotPlanned": "Немає"
+        }
+      },
+      "time_until_connectivity": {
+        "name": "Час до відновлення"
+      },
+      "time_until_outage": {
+        "name": "Час до відключення"
+      },
+      "next_planned_outage_start_time": {
+        "name": "Час початку наступного відключення"
+      },
+      "next_planned_outage_end_time": {
+        "name": "Час закінчення відключення"
+      },
+      "schedule_data_changed_on": {
+        "name": "Графік змінено"
+      }
+    },
+    "button": {
+      "update_schedule": {
+        "name": "Оновити графік"
+      }
+    }
+  },
+  "common": {
+    "event_name_planned_outage": "Планове відключення",
+    "event_name_emergency_outage": "Екстрене відключення",
+    "time_less_than_minute": "менше хвилини"
+  }
+}

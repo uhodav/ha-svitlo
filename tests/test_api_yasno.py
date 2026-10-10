@@ -7,12 +7,12 @@ import aiohttp
 import pytest
 from homeassistant.util import dt as dt_utils
 
-from custom_components.svitlo.api import YasnoApi
-from custom_components.svitlo.api.yasno import (
+from custom_components.svitlo_kyiv.api import YasnoApi
+from custom_components.svitlo_kyiv.api.yasno import (
     _minutes_to_time,
     _parse_day_schedule,
 )
-from custom_components.svitlo.models import PlannedOutageEventType
+from custom_components.svitlo_kyiv.models import PlannedOutageEventType
 
 TEST_REGION_ID = 25
 TEST_PROVIDER_ID = 902
@@ -318,3 +318,73 @@ class TestYasnoApiEvents:
         at = dt_utils.parse_datetime("2025-10-27T08:00:00+02:00")
         event = api.get_current_event(at)
         assert event is None
+
+
+class TestYasnoApiEmergencyKeepsSchedule:
+    """Emergency shutdowns are only a flag - the planned schedule stays."""
+
+    def test_emergency_uses_last_known_slots(
+        self, api, planned_outage_data, emergency_outage_data
+    ):
+        """Empty emergency slots fall back to the last known schedule."""
+        api.planned_outage_data = planned_outage_data
+        assert api.remember_slots(today=datetime.date(2025, 10, 27)) is True
+
+        api.planned_outage_data = emergency_outage_data
+        start = dt_utils.parse_datetime("2025-10-27T00:00:00+02:00")
+        end = dt_utils.parse_datetime("2025-10-28T23:59:59+02:00")
+        events = api.get_events(start, end)
+
+        emergency = [e for e in events if e.event_type == PlannedOutageEventType.EMERGENCY]
+        definite = [e for e in events if e.event_type == PlannedOutageEventType.DEFINITE]
+        assert len(emergency) == 2
+        assert all(e.all_day for e in emergency)
+        assert [(e.start.day, e.start.hour, e.end.hour) for e in definite] == [
+            (27, 16, 20),
+            (28, 15, 18),
+        ]
+
+    def test_emergency_with_own_slots(self, api, emergency_outage_data):
+        """Slots sent together with the emergency flag are parsed."""
+        emergency_outage_data[TEST_GROUP]["today"]["slots"] = [
+            {"start": 0, "end": 600, "type": "NotPlanned"},
+            {"start": 600, "end": 720, "type": "Definite"},
+            {"start": 720, "end": 1440, "type": "NotPlanned"},
+        ]
+        api.planned_outage_data = emergency_outage_data
+        start = dt_utils.parse_datetime("2025-10-27T00:00:00+02:00")
+        events = api.get_events(start, start + datetime.timedelta(days=1))
+        definite = [e for e in events if e.event_type == PlannedOutageEventType.DEFINITE]
+        assert [(e.start.hour, e.end.hour) for e in definite] == [(10, 12)]
+
+    def test_emergency_current_state_is_flag(
+        self, api, planned_outage_data, emergency_outage_data
+    ):
+        """During emergency the current event is the all-day emergency flag."""
+        api.planned_outage_data = planned_outage_data
+        api.remember_slots(today=datetime.date(2025, 10, 27))
+        api.planned_outage_data = emergency_outage_data
+        at = dt_utils.parse_datetime("2025-10-27T17:00:00+02:00")
+        event = api.get_current_event(at)
+        assert event.event_type == PlannedOutageEventType.EMERGENCY
+
+    def test_remember_slots_drops_past_days(self, api, planned_outage_data):
+        """Only today and later are kept."""
+        api.known_slots = {"2025-10-20": [{"start": 0, "end": 60, "type": "Definite"}]}
+        api.planned_outage_data = planned_outage_data
+        api.remember_slots(today=datetime.date(2025, 10, 28))
+        assert list(api.known_slots) == ["2025-10-28"]
+
+    def test_remember_slots_unchanged(self, api, planned_outage_data):
+        """Second call with the same data reports no change."""
+        api.planned_outage_data = planned_outage_data
+        api.remember_slots(today=datetime.date(2025, 10, 27))
+        assert api.remember_slots(today=datetime.date(2025, 10, 27)) is False
+
+    async def test_fetch_error_keeps_last_data(self, api, planned_outage_data):
+        """A failed request does not wipe the last received schedule."""
+        api.planned_outage_data = planned_outage_data
+        with patch("aiohttp.ClientSession.get") as mock_get:
+            mock_get.side_effect = aiohttp.ClientError("boom")
+            await api.fetch_planned_outage_data()
+        assert api.planned_outage_data == planned_outage_data
