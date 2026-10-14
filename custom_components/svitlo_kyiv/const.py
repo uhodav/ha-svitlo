@@ -18,6 +18,14 @@ CONF_PROVIDER_TYPE: Final = "provider_type"
 CONF_UPDATE_INTERVAL: Final = "update_interval"
 # Entry id of the old "svitlo" entry whose entities are moved to this entry
 CONF_MIGRATED_FROM: Final = "migrated_from"
+# Address outage from the DTEK website (optional): street, house and CSRF pair
+CONF_STREET: Final = "street"
+CONF_HOUSE: Final = "house"
+CONF_CSRF_COOKIE: Final = "csrf_cookie"
+CONF_CSRF_TOKEN: Final = "csrf_token"  # noqa: S105
+# Form field: the request copied from the browser (Copy as cURL)
+CONF_REQUEST: Final = "request"
+ADDRESS_KEYS: Final = (CONF_STREET, CONF_HOUSE, CONF_CSRF_COOKIE, CONF_CSRF_TOKEN)
 
 # Provider types
 PROVIDER_TYPE_YASNO: Final = "yasno"

@@ -46,6 +46,28 @@ Names of existing entities do not change: the device is «Київ ДТЕК &lt;
 
 Diagnostics of the entry (**Settings → Devices & services → Svitlo Kyiv → ⋮ → Download diagnostics**) contain the raw data of both sources and the source of each day.
 
+## Outage of your house (optional)
+
+The group schedule and the Yasno emergency flag say nothing about one house. The [DTEK website](https://www.dtek-kem.com.ua/ua/shutdowns) knows the current outage of every house: emergency or planned works, start and estimated restoration. The integration can ask it for your address.
+
+The pages of the website are behind a captcha, the address request is not: it only needs the CSRF pair of the website (cookie `_csrf-dtek-kem` and header `X-CSRF-Token`). You take it once from your browser:
+
+1. Open https://www.dtek-kem.com.ua/ua/shutdowns and pass the «I am human» check.
+2. Open the developer tools (F12) → **Network**.
+3. On the website type your street and select it in the list.
+4. In **Network** find the `ajax` request → right-click → **Copy → Copy as cURL** (any variant).
+5. Paste it at the **Address** step of the setup or in **Options → Address of the house**, then select the house.
+
+The street is taken from the request (it must be written exactly as on the website, e.g. `вул. Прикладна`); apartments are not tracked - DTEK knows only houses. When the website stops accepting the pair, Home Assistant asks for a new request (**Settings → Devices & services**: «Re-authentication required»); the address sensors are unavailable until then, the group schedule keeps working.
+
+Entities of the address:
+
+- **House electricity** - `normal` / `emergency` / `planned` / `stabilization` / `other`; attributes: `reason` (text of DTEK, e.g. «Аварійні ремонтні роботи»), `start`, `end`, `groups`, `dtek_updated_on`, `last_success`.
+- **House outage start**, **House estimated restoration** - timestamps.
+- The calendar shows the emergency and planned works of the house with their exact time (stabilization outages are the group schedule).
+
+The CSRF pair is stored in the entry like a password and is removed from the diagnostics.
+
 ## Installation
 
 The quickest way to install this integration is via [HACS][hacs-url] by clicking the button below:
@@ -98,6 +120,22 @@ If the old integration still runs, the log says which entities could not be move
 **Екстрені відключення - лише ознака.** Під час `EmergencyShutdowns` Yasno не надсилає графік; інтеграція зберігає плановий графік дня з ДТЕК або останній відомий. У календарі - подія «Екстрене відключення» на весь день і планові відключення; сенсор **Електрика** показує `emergency`. Якщо джерело не відповідає, використовуються останні отримані дані; останній графік зберігається і після перезапуску Home Assistant. Атрибут `schedule_sources` сенсора **Електрика** показує джерело кожного дня: `yasno`, `dtek` або `known`.
 
 Налаштування: **група** (наприклад `43.1`) та **інтервал оновлення** в опціях (1-30 хвилин, оптимально 2-5). Назви наявних сутностей не змінюються. Сенсор **Графік змінено** - час, коли планові відключення сьогодні та далі справді змінились. Кнопка **Оновити графік** запитує графік одразу. Діагностика запису містить сирі дані обох джерел.
+
+## Відключення вашого будинку (необов'язково)
+
+Графік групи та ознака екстрених відключень Yasno нічого не кажуть про конкретний будинок. [Сайт ДТЕК](https://www.dtek-kem.com.ua/ua/shutdowns) знає поточне відключення кожного будинку: аварійні чи планові роботи, початок і орієнтовне відновлення. Інтеграція може запитувати його для вашої адреси.
+
+Сторінки сайту закриті капчею, запит адреси - ні: йому потрібна лише CSRF-пара сайту (cookie `_csrf-dtek-kem` і заголовок `X-CSRF-Token`). Її беруть один раз з браузера:
+
+1. Відкрийте https://www.dtek-kem.com.ua/ua/shutdowns і пройдіть перевірку «Я людина».
+2. Відкрийте інструменти розробника (F12) → **Network**.
+3. На сайті введіть свою вулицю й оберіть її зі списку.
+4. У **Network** знайдіть запит `ajax` → права кнопка → **Copy → Copy as cURL** (будь-який варіант).
+5. Вставте його на кроці **Адреса** під час налаштування або в **Опції → Адреса будинку** і оберіть будинок.
+
+Вулиця береться із запиту (точно як на сайті, наприклад `вул. Прикладна`); квартири не відстежуються - ДТЕК знає лише будинки. Коли сайт перестане приймати пару, Home Assistant попросить новий запит («Потрібна повторна автентифікація»); до того сенсори адреси недоступні, графік групи працює далі.
+
+Сутності адреси: **Електрика в будинку** (`normal` / `emergency` / `planned` / `stabilization` / `other`, атрибути `reason`, `start`, `end`, `groups`, `dtek_updated_on`, `last_success`), **Початок відключення будинку**, **Орієнтовне відновлення в будинку**. Календар показує аварійні та планові роботи будинку з точним часом. CSRF-пара зберігається як пароль і прибирається з діагностики.
 
 <!-- Badges -->
 

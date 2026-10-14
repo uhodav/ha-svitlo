@@ -12,12 +12,23 @@ from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_utils
 
+from ..api.dtek_address import (
+    AddressOutage,
+    AddressOutageKind,
+    DtekAddressApi,
+    DtekAddressAuthError,
+    DtekCredentials,
+)
 from ..api.outage_data_ua import OutageDataUaApi
 from ..api.yasno import YasnoApi
 from ..const import (
+    CONF_CSRF_COOKIE,
+    CONF_CSRF_TOKEN,
     CONF_GROUP,
+    CONF_HOUSE,
     CONF_PROVIDER,
     CONF_REGION,
+    CONF_STREET,
     CONF_UPDATE_INTERVAL,
     DEBUG,
     DEFAULT_UPDATE_INTERVAL,
@@ -37,6 +48,13 @@ from ..models import (
 LOGGER = logging.getLogger(__name__)
 
 TIMEFRAME_TO_CHECK = datetime.timedelta(hours=24)
+
+# Outages of the house shown in the calendar (stabilization is the group schedule)
+ADDRESS_CALENDAR_KINDS = (
+    AddressOutageKind.EMERGENCY,
+    AddressOutageKind.PLANNED,
+    AddressOutageKind.OTHER,
+)
 
 
 class YasnoCoordinator(DataUpdateCoordinator):
@@ -129,6 +147,10 @@ class YasnoCoordinator(DataUpdateCoordinator):
         # Second schedule source for regions that outage-data-ua has (Kyiv)
         self.alt_api = OutageDataUaApi.for_region(self.region, str(self.group))
 
+        # Outage of the house from the DTEK website (optional)
+        self.address_api = self._create_address_api(config_entry)
+        self.address_auth_failed = False
+
         # Initialize API and resolve IDs
         self.api = YasnoApi()
         # Note: We'll resolve IDs and update API during first data update
@@ -189,14 +211,15 @@ class YasnoCoordinator(DataUpdateCoordinator):
             )
             self._slots_loaded = True
 
-        # Yasno and the second source (DTEK website copy) together
+        # Yasno, the second source (DTEK website copy) and the address together
+        requests = [self.api.fetch_data(), self._fetch_address()]
         if self.alt_api:
-            await asyncio.gather(self.api.fetch_data(), self.alt_api.fetch_data())
+            requests.append(self.alt_api.fetch_data())
+        await asyncio.gather(*requests)
+        if self.alt_api:
             self.api.set_alternative(
                 self.alt_api.get_days(), self.alt_api.get_updated_on()
             )
-        else:
-            await self.api.fetch_data()
         # Сохраняем время последнего обновления
         self.last_schedule_request_time = datetime.datetime.now().isoformat()
 
@@ -208,6 +231,84 @@ class YasnoCoordinator(DataUpdateCoordinator):
         # Invalidate cache when we fetch new data
         self._cached_group_data = None
         self._group_data_cache_time = None
+
+    @staticmethod
+    def _create_address_api(config_entry: ConfigEntry) -> DtekAddressApi | None:
+        """Address source when the entry has the address of the DTEK website."""
+        data = config_entry.data
+        if not all(
+            data.get(key)
+            for key in (CONF_STREET, CONF_HOUSE, CONF_CSRF_COOKIE, CONF_CSRF_TOKEN)
+        ):
+            return None
+        return DtekAddressApi(
+            data[CONF_STREET],
+            data[CONF_HOUSE],
+            DtekCredentials(data[CONF_CSRF_COOKIE], data[CONF_CSRF_TOKEN]),
+        )
+
+    async def _fetch_address(self) -> None:
+        """Request the address; a rejected CSRF pair starts the reauth flow."""
+        if self.address_api is None:
+            return
+        try:
+            await self.address_api.fetch_data()
+        except DtekAddressAuthError:
+            if not self.address_auth_failed:
+                LOGGER.warning(
+                    "The DTEK website does not accept the CSRF pair any more: "
+                    "paste a new request in the integration settings"
+                )
+            self.address_auth_failed = True
+            self.config_entry.async_start_reauth(self.hass)
+            return
+        self.address_auth_failed = False
+
+    @property
+    def address_outage(self) -> AddressOutage | None:
+        """Outage of the house; None without the address or its data."""
+        if self.address_api is None or self.address_auth_failed:
+            return None
+        return self.address_api.get_outage()
+
+    def _get_address_event(self) -> CalendarEvent | None:
+        """Calendar event of the outage of the house (not stabilization)."""
+        outage = self.address_outage
+        if (
+            outage is None
+            or outage.kind not in ADDRESS_CALENDAR_KINDS
+            or not outage.start
+            or not outage.end
+            or outage.end <= outage.start
+        ):
+            return None
+        return CalendarEvent(
+            summary=outage.reason
+            or self.event_name_map.get(PlannedOutageEventType.EMERGENCY),
+            start=outage.start,
+            end=outage.end,
+            description=f"{self.address_api.street}, {self.address_api.house}",
+            uid=f"address-{outage.kind.value}",
+        )
+
+    def get_calendar_event(self) -> CalendarEvent | None:
+        """Return the current calendar event: the outage of the house first."""
+        event = self._get_address_event()
+        if event and event.start <= dt_utils.now() < event.end:
+            return event
+        return self.get_current_event()
+
+    def get_calendar_events_between(
+        self,
+        start_date: datetime.datetime,
+        end_date: datetime.datetime,
+    ) -> list[CalendarEvent]:
+        """Events of the calendar: the schedule and the outage of the house."""
+        events = self.get_events_between(start_date, end_date)
+        event = self._get_address_event()
+        if event and event.start < end_date and event.end > start_date:
+            events.append(event)
+        return events
 
     async def _track_schedule_change(self) -> None:
         """Remember when the planned outages of today and later changed."""

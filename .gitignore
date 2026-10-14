@@ -22,3 +22,6 @@ config/*
 .todo.md
 
 *.psd
+
+# Local assistant rules
+.amazonq/

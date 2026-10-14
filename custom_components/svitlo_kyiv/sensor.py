@@ -12,8 +12,11 @@ from homeassistant.components.sensor import (
 from homeassistant.components.sensor.const import SensorDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .api.dtek_address import AddressOutageKind
+from .const import DOMAIN
 from .coordinator.yasno import YasnoCoordinator
 from .entity import IntegrationEntity
 from .models import ConnectivityState
@@ -29,6 +32,8 @@ class IntegrationSensorDescription(SensorEntityDescription):
     """Yasno Outages entity description."""
 
     val_func: Callable[[YasnoCoordinator], Any]
+    available_func: Callable[[YasnoCoordinator], bool] | None = None
+    attr_func: Callable[[YasnoCoordinator], dict[str, Any]] | None = None
 
 
 SENSOR_TYPES: tuple[IntegrationSensorDescription, ...] = (
@@ -134,6 +139,66 @@ SENSOR_TYPES: tuple[IntegrationSensorDescription, ...] = (
     ),
 )
 
+
+def _address_attributes(coordinator: YasnoCoordinator) -> dict[str, Any]:
+    """Details of the outage of the house."""
+    outage = coordinator.address_outage
+    api = coordinator.address_api
+    return {
+        "street": api.street,
+        "house": api.house,
+        "reason": outage.reason if outage else None,
+        "start": outage.start if outage else None,
+        "end": outage.end if outage else None,
+        "type": outage.type if outage else None,
+        "groups": list(outage.groups) if outage else [],
+        "dtek_updated_on": api.get_updated_on(),
+        "last_success": api.last_success,
+    }
+
+
+def _address_available(coordinator: YasnoCoordinator) -> bool:
+    """Return whether the address has data (and its CSRF pair is accepted)."""
+    return coordinator.address_outage is not None
+
+
+def _address_value(coordinator: YasnoCoordinator, field: str) -> Any:
+    """Return a field of the outage of the house."""
+    outage = coordinator.address_outage
+    return getattr(outage, field) if outage else None
+
+
+# Created only when the entry has the address of the DTEK website
+ADDRESS_SENSOR_TYPES: tuple[IntegrationSensorDescription, ...] = (
+    IntegrationSensorDescription(
+        key="address_outage",
+        translation_key="address_outage",
+        icon="mdi:home-lightning-bolt",
+        device_class=SensorDeviceClass.ENUM,
+        options=[str(_.value) for _ in AddressOutageKind],
+        val_func=lambda coordinator: _address_value(coordinator, "kind"),
+        available_func=_address_available,
+        attr_func=_address_attributes,
+    ),
+    IntegrationSensorDescription(
+        key="address_outage_start",
+        translation_key="address_outage_start",
+        icon="mdi:home-clock",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        val_func=lambda coordinator: _address_value(coordinator, "start"),
+        available_func=_address_available,
+    ),
+    IntegrationSensorDescription(
+        key="address_outage_end",
+        translation_key="address_outage_end",
+        icon="mdi:home-clock-outline",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        val_func=lambda coordinator: _address_value(coordinator, "end"),
+        available_func=_address_available,
+    ),
+)
+
+
 def _format_last_schedule_request(dt_str):
     if not dt_str:
         return None
@@ -181,14 +246,26 @@ class LastScheduleRequestSensor(SensorEntity, RestoreEntity):
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,  # noqa: ARG001
+    hass: HomeAssistant,
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the sensor platform."""
     LOGGER.debug("Setup new sensor: %s", config_entry)
     coordinator: YasnoCoordinator = config_entry.runtime_data
-    entities = [IntegrationSensor(coordinator, description) for description in SENSOR_TYPES]
+    descriptions = SENSOR_TYPES
+    if coordinator.address_api is not None:
+        descriptions += ADDRESS_SENSOR_TYPES
+    else:
+        # The address was removed in the options: remove its sensors
+        registry = er.async_get(hass)
+        for description in ADDRESS_SENSOR_TYPES:
+            unique_id = f"{config_entry.entry_id}-{coordinator.group}-{description.key}"
+            if entity_id := registry.async_get_entity_id("sensor", DOMAIN, unique_id):
+                registry.async_remove(entity_id)
+    entities = [
+        IntegrationSensor(coordinator, description) for description in descriptions
+    ]
     entities.append(LastScheduleRequestSensor(coordinator))
     async_add_entities(entities)
 
@@ -213,6 +290,14 @@ class IntegrationSensor(IntegrationEntity, SensorEntity):
         )
 
     @property
+    def available(self) -> bool:
+        """Address sensors need the data of the address."""
+        available_func = self.entity_description.available_func
+        if available_func is not None and not available_func(self.coordinator):
+            return False
+        return super().available
+
+    @property
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
         return self.entity_description.val_func(self.coordinator)
@@ -235,6 +320,8 @@ class IntegrationSensor(IntegrationEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return additional attributes for the electricity sensor."""
+        if self.entity_description.attr_func is not None:
+            return self.entity_description.attr_func(self.coordinator)
         if self.entity_description.key != "electricity":
             return None
 

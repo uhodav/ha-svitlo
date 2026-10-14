@@ -54,7 +54,7 @@ class PlannedOutagesCalendar(IntegrationEntity, CalendarEntity):
     @property
     def event(self) -> CalendarEvent | None:
         """Return the current or next upcoming event or None."""
-        return self.coordinator.get_current_event()
+        return self.coordinator.get_calendar_event()
 
     async def async_get_events(
         self,
@@ -64,4 +64,4 @@ class PlannedOutagesCalendar(IntegrationEntity, CalendarEntity):
     ) -> list[CalendarEvent]:
         """Return calendar events within a datetime range."""
         LOGGER.debug("Get events between %s and %s", start_date, end_date)
-        return self.coordinator.get_events_between(start_date, end_date)
+        return self.coordinator.get_calendar_events_between(start_date, end_date)

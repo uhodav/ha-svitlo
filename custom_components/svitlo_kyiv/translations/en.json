@@ -2,7 +2,8 @@
   "title": "Svitlo Kyiv",
   "config": {
     "abort": {
-      "cannot_connect": "Failed to get the Kyiv groups from Yasno. Try again later."
+      "cannot_connect": "Failed to get the Kyiv groups from Yasno. Try again later.",
+      "reauth_successful": "The new CSRF pair is saved."
     },
     "step": {
       "user": {
@@ -26,12 +27,57 @@
         "data_description": {
           "group": "Find your group at https://static.yasno.ua/kyiv/outages or https://www.dtek-kem.com.ua/ua/shutdowns"
         }
+      },
+      "address": {
+        "title": "DTEK website: outage of your house",
+        "description": "Optional: the current outage of your house (emergency and planned works, estimated restoration) from the DTEK website. Leave the fields empty to skip.\n\n1. Open https://www.dtek-kem.com.ua/ua/shutdowns and pass the «I am human» check.\n2. Open the developer tools (F12) → the Network tab.\n3. On the website type your street and select it in the list.\n4. In Network find the `ajax` request, right-click it → Copy → Copy as cURL (any variant) and paste it here.",
+        "data": {
+          "request": "Request copied from the browser",
+          "street": "Street"
+        },
+        "data_description": {
+          "request": "Copy as cURL of the `ajax` request. Only the CSRF pair of the website is taken from it (cookie _csrf-dtek-kem and header X-CSRF-Token).",
+          "street": "Exactly as on the DTEK website, e.g. «вул. Прикладна». Taken from the request when empty."
+        }
+      },
+      "house": {
+        "title": "DTEK website: house",
+        "description": "Houses of «{street}» on the DTEK website.",
+        "data": {
+          "house": "House"
+        }
+      },
+      "reauth_confirm": {
+        "title": "DTEK website: new request",
+        "description": "The DTEK website does not accept the saved CSRF pair any more ({street}, {house}). Paste a new request.\n\n1. Open https://www.dtek-kem.com.ua/ua/shutdowns and pass the «I am human» check.\n2. Open the developer tools (F12) → the Network tab.\n3. On the website type your street and select it in the list.\n4. In Network find the `ajax` request, right-click it → Copy → Copy as cURL (any variant) and paste it here.",
+        "data": {
+          "request": "Request copied from the browser"
+        },
+        "data_description": {
+          "request": "Copy as cURL of the `ajax` request. Only the CSRF pair of the website is taken from it (cookie _csrf-dtek-kem and header X-CSRF-Token)."
+        }
       }
+    },
+    "error": {
+      "invalid_request": "No cookie _csrf-dtek-kem or header X-CSRF-Token in the pasted text. Copy the `ajax` request as cURL.",
+      "invalid_auth": "The DTEK website does not accept this CSRF pair. Reload the website page and copy the request again.",
+      "street_required": "Enter the street: the request has none.",
+      "street_not_found": "The DTEK website does not know this street. Write it exactly as in the list of the website, e.g. «вул. Прикладна».",
+      "cannot_connect_dtek": "The DTEK website does not answer. Try again later.",
+      "house_not_found": "The saved house is not on the street any more. Set the address again in the integration options."
     }
   },
   "options": {
     "step": {
       "init": {
+        "title": "Svitlo Kyiv",
+        "menu_options": {
+          "settings": "Settings",
+          "address": "Address of the house (DTEK website)",
+          "remove_address": "Stop tracking the house"
+        }
+      },
+      "settings": {
         "title": "Settings",
         "data": {
           "update_interval": "Update interval (minutes)"
@@ -39,7 +85,37 @@
         "data_description": {
           "update_interval": "How often to check for new outage data (1-30 minutes). Yasno publishes changes at any time; 2-5 minutes is a good balance. The schedule can also be requested right away with the Update schedule button."
         }
+      },
+      "address": {
+        "title": "DTEK website: outage of your house",
+        "description": "Optional: the current outage of your house (emergency and planned works, estimated restoration) from the DTEK website. Leave the fields empty to skip.\n\n1. Open https://www.dtek-kem.com.ua/ua/shutdowns and pass the «I am human» check.\n2. Open the developer tools (F12) → the Network tab.\n3. On the website type your street and select it in the list.\n4. In Network find the `ajax` request, right-click it → Copy → Copy as cURL (any variant) and paste it here.",
+        "data": {
+          "request": "Request copied from the browser",
+          "street": "Street"
+        },
+        "data_description": {
+          "request": "Copy as cURL of the `ajax` request. Only the CSRF pair of the website is taken from it (cookie _csrf-dtek-kem and header X-CSRF-Token).",
+          "street": "Exactly as on the DTEK website, e.g. «вул. Прикладна». Taken from the request when empty."
+        }
+      },
+      "house": {
+        "title": "DTEK website: house",
+        "description": "Houses of «{street}» on the DTEK website.",
+        "data": {
+          "house": "House"
+        }
+      },
+      "remove_address": {
+        "title": "Stop tracking the house",
+        "description": "Remove {street}, {house} and its sensors. The schedule of the group stays."
       }
+    },
+    "error": {
+      "invalid_request": "No cookie _csrf-dtek-kem or header X-CSRF-Token in the pasted text. Copy the `ajax` request as cURL.",
+      "invalid_auth": "The DTEK website does not accept this CSRF pair. Reload the website page and copy the request again.",
+      "street_required": "Enter the street: the request has none.",
+      "street_not_found": "The DTEK website does not know this street. Write it exactly as in the list of the website, e.g. «вул. Прикладна».",
+      "cannot_connect_dtek": "The DTEK website does not answer. Try again later."
     }
   },
   "device": {
@@ -107,6 +183,22 @@
       },
       "schedule_data_changed_on": {
         "name": "Schedule data changed on"
+      },
+      "address_outage": {
+        "name": "House electricity",
+        "state": {
+          "normal": "Connected",
+          "emergency": "Emergency outage",
+          "planned": "Planned works",
+          "stabilization": "Stabilization outage",
+          "other": "Outage"
+        }
+      },
+      "address_outage_start": {
+        "name": "House outage start"
+      },
+      "address_outage_end": {
+        "name": "House estimated restoration"
       }
     },
     "button": {
