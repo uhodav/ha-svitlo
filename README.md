@@ -64,7 +64,7 @@ Entities of the address:
 
 - **House electricity** - `normal` / `emergency` / `planned` / `stabilization` / `other`; attributes: `reason` (text of DTEK, e.g. «Аварійні ремонтні роботи»), `start`, `end`, `groups`, `dtek_updated_on`, `last_success`.
 - **House outage start**, **House estimated restoration** - timestamps.
-- The calendar shows the emergency and planned works of the house with their exact time (stabilization outages are the group schedule).
+- The calendar shows the emergency and planned works of the house with their exact time (stabilization outages are the group schedule). The state of the calendar stays the group schedule. In automations, planned group outages are the events with `description == 'Definite'`.
 
 The CSRF pair is stored in the entry like a password and is removed from the diagnostics.
 

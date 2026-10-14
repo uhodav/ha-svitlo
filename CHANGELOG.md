@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1
+
+- The state of the calendar (`on`, current event) is the group schedule again; outages of the house are only in the event list. Automations that treat a running calendar event as a planned outage are not confused by an emergency of the house.
+- Outages of the house in the event list have the address in `description` (planned group outages have `Definite`, the emergency flag `Emergency`): filter planned outages by `description == 'Definite'`.
+
 ## 0.7.0
 
 Outage of your house from the DTEK website (optional).

@@ -53,8 +53,13 @@ class PlannedOutagesCalendar(IntegrationEntity, CalendarEntity):
 
     @property
     def event(self) -> CalendarEvent | None:
-        """Return the current or next upcoming event or None."""
-        return self.coordinator.get_calendar_event()
+        """
+        Return the current event of the group schedule or None.
+
+        Outages of the house are only in the event list: automations use the
+        state of the calendar as the group schedule.
+        """
+        return self.coordinator.get_current_event()
 
     async def async_get_events(
         self,

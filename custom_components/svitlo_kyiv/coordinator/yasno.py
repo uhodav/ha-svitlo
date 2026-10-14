@@ -291,13 +291,6 @@ class YasnoCoordinator(DataUpdateCoordinator):
             uid=f"address-{outage.kind.value}",
         )
 
-    def get_calendar_event(self) -> CalendarEvent | None:
-        """Return the current calendar event: the outage of the house first."""
-        event = self._get_address_event()
-        if event and event.start <= dt_utils.now() < event.end:
-            return event
-        return self.get_current_event()
-
     def get_calendar_events_between(
         self,
         start_date: datetime.datetime,
