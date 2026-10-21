@@ -5,11 +5,15 @@ The website answers the address form by ``POST /ua/ajax`` (``method=getHomeNum``
 with every house of a street: the current outage (emergency, planned works,
 stabilization), its start and the estimated restoration.
 
-The pages of the website are behind an Imperva captcha, the ``/ua/ajax`` endpoint
-is not. It only checks the CSRF pair of the Yii framework: the ``_csrf-dtek-kem``
-cookie and the ``X-CSRF-Token`` header. The user takes the pair once from the
-browser (Copy as cURL of the request of the address form) after passing the
-captcha; no session cookie is needed.
+The website is behind Imperva: it may answer any request, ``/ua/ajax`` too, with
+a captcha page. The endpoint checks the CSRF pair of the Yii framework: the
+``_csrf-dtek-kem`` cookie and the ``X-CSRF-Token`` header. The user takes the pair
+once from the browser (Copy as cURL of the request of the address form) after
+passing the captcha; the Imperva cookies of that request (``visid_incap_*``,
+``incap_ses_*``, ...) are sent too - with them Imperva shows the captcha less often.
+
+After a captcha page the next request is made in CAPTCHA_RETRY; without a
+successful answer for STALE the data is stale (the coordinator shows no outage).
 """
 
 from __future__ import annotations
@@ -18,7 +22,7 @@ import datetime
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from urllib.parse import unquote_plus
 from zoneinfo import ZoneInfo
@@ -46,6 +50,16 @@ _TOKEN_RE = re.compile(
     r"x-csrf-token[\"']?\s*(?::|=)\s*[\"']?([A-Za-z0-9_\-+/]+=*)", re.IGNORECASE
 )
 # The street of the address form request body: data[1][value]=вул.+...
+# Imperva cookies in a cookie string (-b / cookie header) or a PowerShell Cookie
+_IMPERVA_NAME = r"(?:visid_incap_\d+|incap_ses_\d+_\d+|incap_wrt_\d+|nlbi_\d+|reese84)"
+_IMPERVA_PAIR_RE = re.compile(rf"({_IMPERVA_NAME})=([^;\"'\s,)]+)")
+_IMPERVA_PS_RE = re.compile(
+    rf"Cookie\(\s*\"({_IMPERVA_NAME})\"\s*,\s*\"([^\"]+)\"", re.IGNORECASE
+)
+
+# After a captcha page - the next request; without data for STALE - stale
+CAPTCHA_RETRY = datetime.timedelta(minutes=30)
+STALE = datetime.timedelta(hours=2)
 _STREET_RE = re.compile(r"data%5B1%5D%5Bvalue%5D=([^&'\"\s]+)", re.IGNORECASE)
 
 
@@ -61,6 +75,10 @@ class DtekAddressStreetError(DtekAddressError):
     """The website does not know the street."""
 
 
+class DtekAddressCaptchaError(DtekAddressError):
+    """Imperva answered with a captcha page instead of the data."""
+
+
 class AddressOutageKind(StrEnum):
     """Kind of the outage of the house."""
 
@@ -73,10 +91,15 @@ class AddressOutageKind(StrEnum):
 
 @dataclass(frozen=True)
 class DtekCredentials:
-    """CSRF pair of the website."""
+    """CSRF pair of the website and the Imperva cookies of the browser."""
 
     cookie: str
     token: str
+    imperva: dict[str, str] = field(default_factory=dict)
+
+    def cookies(self) -> dict[str, str]:
+        """Cookies of a request."""
+        return {**self.imperva, CSRF_COOKIE: self.cookie}
 
 
 @dataclass(frozen=True)
@@ -108,7 +131,9 @@ def parse_credentials(text: str) -> tuple[DtekCredentials | None, str | None]:
         street = unquote_plus(street_match.group(1)).strip() or None
     if not cookie or not token:
         return None, street
-    return DtekCredentials(cookie.group(1), token.group(1)), street
+    imperva = dict(_IMPERVA_PAIR_RE.findall(text))
+    imperva.update(_IMPERVA_PS_RE.findall(text))
+    return DtekCredentials(cookie.group(1), token.group(1), imperva), street
 
 
 def _parse_datetime(value: str | None) -> datetime.datetime | None:
@@ -156,11 +181,17 @@ def parse_updated_on(value: str | None) -> datetime.datetime | None:
     return _parse_datetime(value)
 
 
-async def fetch_street(street: str, credentials: DtekCredentials) -> dict:
+async def fetch_street(
+    street: str,
+    credentials: DtekCredentials,
+    new_cookies: dict[str, str] | None = None,
+) -> dict:
     """
     Every house of the street: the answer of the website.
 
-    Raises DtekAddressAuthError, DtekAddressStreetError or DtekAddressError.
+    Imperva cookies set by the answer are added to new_cookies. Raises
+    DtekAddressAuthError, DtekAddressCaptchaError, DtekAddressStreetError or
+    DtekAddressError.
     """
     headers = {
         "User-Agent": USER_AGENT,
@@ -175,7 +206,7 @@ async def fetch_street(street: str, credentials: DtekCredentials) -> dict:
     }
     try:
         async with (
-            aiohttp.ClientSession(cookies={CSRF_COOKIE: credentials.cookie}) as session,
+            aiohttp.ClientSession(cookies=credentials.cookies()) as session,
             session.post(
                 DTEK_KEM_AJAX_URL,
                 data=form,
@@ -185,6 +216,14 @@ async def fetch_street(street: str, credentials: DtekCredentials) -> dict:
         ):
             text = await response.text()
             status = response.status
+            if new_cookies is not None:
+                new_cookies.update(
+                    {
+                        name: morsel.value
+                        for name, morsel in response.cookies.items()
+                        if re.fullmatch(_IMPERVA_NAME, name)
+                    }
+                )
     except (aiohttp.ClientError, TimeoutError) as err:
         raise DtekAddressError(str(err)) from err
 
@@ -196,7 +235,8 @@ async def fetch_street(street: str, credentials: DtekCredentials) -> dict:
     try:
         data = json.loads(text)
     except ValueError as err:
-        # Not JSON: most likely the Imperva captcha page
+        if "incapsula" in text.lower() or text.lstrip()[:1] == "<":
+            raise DtekAddressCaptchaError(text[:200]) from err
         raise DtekAddressError(f"Not JSON: {text[:200]}") from err
     if not data.get("result") or not isinstance(data.get("data"), dict):
         raise DtekAddressStreetError(street)
@@ -213,18 +253,35 @@ class DtekAddressApi:
         self.credentials = credentials
         self.data: dict | None = None
         self.last_success: datetime.datetime | None = None
+        # Captcha: since when (no success between) and when to ask again
+        self.captcha_since: datetime.datetime | None = None
+        self.retry_after: datetime.datetime | None = None
 
-    async def fetch_data(self) -> None:
+    async def fetch_data(self, now: datetime.datetime | None = None) -> None:
         """
-        Request the street.
+        Request the street (not before retry_after after a captcha page).
 
         Raises DtekAddressAuthError when the CSRF pair is not accepted; other
         errors keep the last answer.
         """
+        now = now or datetime.datetime.now(tz=KYIV_TZ)
+        if self.retry_after is not None and now < self.retry_after:
+            return
+        new_cookies: dict[str, str] = {}
         try:
-            self.data = await fetch_street(self.street, self.credentials)
+            data = await fetch_street(self.street, self.credentials, new_cookies)
         except DtekAddressAuthError:
             raise
+        except DtekAddressCaptchaError:
+            self.captcha_since = self.captcha_since or now
+            self.retry_after = now + CAPTCHA_RETRY
+            LOGGER.warning(
+                "The DTEK website answered with a captcha page (since %s); "
+                "next request at %s",
+                self.captcha_since,
+                self.retry_after,
+            )
+            return
         except DtekAddressError as err:
             LOGGER.warning(
                 "Failed to fetch the DTEK address %s %s: %s",
@@ -233,7 +290,24 @@ class DtekAddressApi:
                 err,
             )
             return
-        self.last_success = datetime.datetime.now(tz=KYIV_TZ)
+        finally:
+            # Imperva refreshes its cookies: keep the new ones (in memory)
+            if new_cookies:
+                self.credentials = replace(
+                    self.credentials,
+                    imperva={**self.credentials.imperva, **new_cookies},
+                )
+        self.data = data
+        self.last_success = now
+        self.captcha_since = None
+        self.retry_after = None
+
+    def is_stale(self, now: datetime.datetime | None = None) -> bool:
+        """Return whether the last answer is older than STALE."""
+        if self.data is None or self.last_success is None:
+            return False
+        now = now or datetime.datetime.now(tz=KYIV_TZ)
+        return now - self.last_success > STALE
 
     @property
     def house_data(self) -> dict | None:

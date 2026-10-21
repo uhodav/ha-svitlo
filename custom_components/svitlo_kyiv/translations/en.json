@@ -49,7 +49,7 @@
       },
       "reauth_confirm": {
         "title": "DTEK website: new request",
-        "description": "The DTEK website does not accept the saved CSRF pair any more ({street}, {house}). Paste a new request.\n\n1. Open https://www.dtek-kem.com.ua/ua/shutdowns and pass the «I am human» check.\n2. Open the developer tools (F12) → the Network tab.\n3. On the website type your street and select it in the list.\n4. In Network find the `ajax` request, right-click it → Copy → Copy as cURL (any variant) and paste it here.",
+        "description": "The DTEK website does not accept the saved request any more or keeps showing a captcha (Imperva) ({street}, {house}). Paste a new request.\n\n1. Open https://www.dtek-kem.com.ua/ua/shutdowns and pass the «I am human» check.\n2. Open the developer tools (F12) → the Network tab.\n3. On the website type your street and select it in the list.\n4. In Network find the `ajax` request, right-click it → Copy → Copy as cURL (any variant) and paste it here.",
         "data": {
           "request": "Request copied from the browser"
         },

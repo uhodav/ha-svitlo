@@ -26,6 +26,7 @@ from ..const import (
     CONF_CSRF_TOKEN,
     CONF_GROUP,
     CONF_HOUSE,
+    CONF_IMPERVA_COOKIES,
     CONF_PROVIDER,
     CONF_REGION,
     CONF_STREET,
@@ -48,6 +49,9 @@ from ..models import (
 LOGGER = logging.getLogger(__name__)
 
 TIMEFRAME_TO_CHECK = datetime.timedelta(hours=24)
+
+# Captcha for so long - ask the user for a new request (reauth flow)
+CAPTCHA_REAUTH = datetime.timedelta(hours=2)
 
 # Outages of the house shown in the calendar (stabilization is the group schedule)
 ADDRESS_CALENDAR_KINDS = (
@@ -150,6 +154,8 @@ class YasnoCoordinator(DataUpdateCoordinator):
         # Outage of the house from the DTEK website (optional)
         self.address_api = self._create_address_api(config_entry)
         self.address_auth_failed = False
+        # The reauth flow is started once per captcha episode
+        self._captcha_reauth_started = False
 
         # Initialize API and resolve IDs
         self.api = YasnoApi()
@@ -244,7 +250,11 @@ class YasnoCoordinator(DataUpdateCoordinator):
         return DtekAddressApi(
             data[CONF_STREET],
             data[CONF_HOUSE],
-            DtekCredentials(data[CONF_CSRF_COOKIE], data[CONF_CSRF_TOKEN]),
+            DtekCredentials(
+                data[CONF_CSRF_COOKIE],
+                data[CONF_CSRF_TOKEN],
+                dict(data.get(CONF_IMPERVA_COOKIES) or {}),
+            ),
         )
 
     async def _fetch_address(self) -> None:
@@ -263,13 +273,44 @@ class YasnoCoordinator(DataUpdateCoordinator):
             self.config_entry.async_start_reauth(self.hass)
             return
         self.address_auth_failed = False
+        since = self.address_api.captcha_since
+        if since is None:
+            self._captcha_reauth_started = False
+        elif (
+            not self._captcha_reauth_started
+            and dt_utils.now() - since >= CAPTCHA_REAUTH
+        ):
+            # Imperva keeps answering with a captcha: a fresh request from the
+            # browser (new Imperva cookies) is needed
+            LOGGER.warning(
+                "The DTEK website answers with a captcha since %s: "
+                "paste a new request in the integration settings",
+                since,
+            )
+            self._captcha_reauth_started = True
+            self.config_entry.async_start_reauth(self.hass)
 
     @property
     def address_outage(self) -> AddressOutage | None:
-        """Outage of the house; None without the address or its data."""
+        """
+        Outage of the house; None without the address or its data.
+
+        Stale data (no answer of the website for a long time) is shown as no
+        outage: the last known outage may be over long ago.
+        """
         if self.address_api is None or self.address_auth_failed:
             return None
-        return self.address_api.get_outage()
+        outage = self.address_api.get_outage()
+        if outage is not None and self.address_api.is_stale():
+            return AddressOutage(
+                AddressOutageKind.NORMAL, None, None, None, None, outage.groups
+            )
+        return outage
+
+    @property
+    def address_stale(self) -> bool:
+        """The data of the address is stale (shown as no outage)."""
+        return self.address_api is not None and self.address_api.is_stale()
 
     def _get_address_event(self) -> CalendarEvent | None:
         """Calendar event of the outage of the house (not stabilization)."""

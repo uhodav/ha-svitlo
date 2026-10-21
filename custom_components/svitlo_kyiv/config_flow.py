@@ -38,6 +38,7 @@ from .const import (
     CONF_CSRF_TOKEN,
     CONF_GROUP,
     CONF_HOUSE,
+    CONF_IMPERVA_COOKIES,
     CONF_MIGRATED_FROM,
     CONF_PROVIDER,
     CONF_PROVIDER_TYPE,
@@ -157,6 +158,7 @@ class AddressFlowMixin:
                     CONF_HOUSE: user_input[CONF_HOUSE],
                     CONF_CSRF_COOKIE: self._credentials.cookie,
                     CONF_CSRF_TOKEN: self._credentials.token,
+                    CONF_IMPERVA_COOKIES: dict(self._credentials.imperva),
                 }
             )
 
@@ -253,6 +255,7 @@ class IntegrationConfigFlow(AddressFlowMixin, ConfigFlow, domain=DOMAIN):
                     data_updates={
                         CONF_CSRF_COOKIE: credentials.cookie,
                         CONF_CSRF_TOKEN: credentials.token,
+                        CONF_IMPERVA_COOKIES: dict(credentials.imperva),
                     },
                 )
 

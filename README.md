@@ -68,6 +68,8 @@ Entities of the address:
 
 The CSRF pair is stored in the entry like a password and is removed from the diagnostics.
 
+The website is behind Imperva and sometimes answers with a captcha page. Then the integration asks again in 30 minutes; the Imperva cookies of the pasted request (`visid_incap_*`, `incap_ses_*`) are sent too, so the captcha appears less often. If the captcha lasts 2 hours, Home Assistant asks for a new request («Re-authentication required»). Without data for 2 hours **House electricity** shows `normal` with the attribute `stale: true` (the last known outage may be over long ago); attributes `captcha_since` and `next_request` show the state of the captcha.
+
 ## Installation
 
 The quickest way to install this integration is via [HACS][hacs-url] by clicking the button below:
@@ -136,6 +138,8 @@ If the old integration still runs, the log says which entities could not be move
 Вулиця береться із запиту (точно як на сайті, наприклад `вул. Прикладна`); квартири не відстежуються - ДТЕК знає лише будинки. Коли сайт перестане приймати пару, Home Assistant попросить новий запит («Потрібна повторна автентифікація»); до того сенсори адреси недоступні, графік групи працює далі.
 
 Сутності адреси: **Електрика в будинку** (`normal` / `emergency` / `planned` / `stabilization` / `other`, атрибути `reason`, `start`, `end`, `groups`, `dtek_updated_on`, `last_success`), **Початок відключення будинку**, **Орієнтовне відновлення в будинку**. Календар показує аварійні та планові роботи будинку з точним часом. CSRF-пара зберігається як пароль і прибирається з діагностики.
+
+Сайт закритий Imperva і інколи відповідає сторінкою з капчею. Тоді інтеграція питає знову через 30 хвилин; cookies Imperva зі вставленого запиту (`visid_incap_*`, `incap_ses_*`) теж надсилаються, тож капча з'являється рідше. Якщо капча триває 2 години, Home Assistant попросить новий запит («Потрібна повторна автентифікація»). Без даних 2 години **Електрика в будинку** показує `normal` з атрибутом `stale: true` (останнє відоме відключення могло давно закінчитись); атрибути `captcha_since` і `next_request` показують стан капчі.
 
 <!-- Badges -->
 

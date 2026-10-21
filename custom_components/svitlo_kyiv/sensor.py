@@ -154,6 +154,10 @@ def _address_attributes(coordinator: YasnoCoordinator) -> dict[str, Any]:
         "groups": list(outage.groups) if outage else [],
         "dtek_updated_on": api.get_updated_on(),
         "last_success": api.last_success,
+        # No answer of the website for a long time: shown as no outage
+        "stale": coordinator.address_stale,
+        "captcha_since": api.captcha_since,
+        "next_request": api.retry_after,
     }
 
 

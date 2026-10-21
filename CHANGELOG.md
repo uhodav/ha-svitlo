@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0
+
+The DTEK website (Imperva) started to answer the address request with a captcha page from time to time.
+
+- A captcha page is not an error of the data: the next request is made in 30 minutes (not every update), so the website is not hammered; a successful answer resets it.
+- The Imperva cookies of the pasted request (`visid_incap_*`, `incap_ses_*`, ...) are saved and sent with the CSRF pair; new ones from the answers are kept - with them Imperva shows the captcha less often.
+- A captcha for 2 hours starts the re-authentication («Re-authentication required»): paste a fresh request from the browser.
+- Without a successful answer for 2 hours the data is stale: **House electricity** shows `normal` (no outage) with the attribute `stale: true`, the calendar has no outage of the house. New attributes: `stale`, `captcha_since`, `next_request`.
+- The Imperva cookies are removed from the diagnostics.
+
 ## 0.7.1
 
 - The state of the calendar (`on`, current event) is the group schedule again; outages of the house are only in the event list. Automations that treat a running calendar event as a planned outage are not confused by an emergency of the house.

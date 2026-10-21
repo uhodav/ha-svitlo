@@ -23,9 +23,17 @@ CONF_STREET: Final = "street"
 CONF_HOUSE: Final = "house"
 CONF_CSRF_COOKIE: Final = "csrf_cookie"
 CONF_CSRF_TOKEN: Final = "csrf_token"  # noqa: S105
+# Imperva cookies of the pasted request (visid_incap_*, incap_ses_*, ...)
+CONF_IMPERVA_COOKIES: Final = "imperva_cookies"
 # Form field: the request copied from the browser (Copy as cURL)
 CONF_REQUEST: Final = "request"
-ADDRESS_KEYS: Final = (CONF_STREET, CONF_HOUSE, CONF_CSRF_COOKIE, CONF_CSRF_TOKEN)
+ADDRESS_KEYS: Final = (
+    CONF_STREET,
+    CONF_HOUSE,
+    CONF_CSRF_COOKIE,
+    CONF_CSRF_TOKEN,
+    CONF_IMPERVA_COOKIES,
+)
 
 # Provider types
 PROVIDER_TYPE_YASNO: Final = "yasno"

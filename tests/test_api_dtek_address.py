@@ -12,6 +12,7 @@ from custom_components.svitlo_kyiv.api.dtek_address import (
     AddressOutageKind,
     DtekAddressApi,
     DtekAddressAuthError,
+    DtekAddressCaptchaError,
     DtekAddressError,
     DtekAddressStreetError,
     DtekCredentials,
@@ -80,22 +81,59 @@ def street_answer():
     }
 
 
-def _response(status, text):
+def _response(status, text, cookies=None):
     response = AsyncMock()
     response.status = status
     response.text = AsyncMock(return_value=text)
+    response.cookies = {
+        name: MagicMock(value=value) for name, value in (cookies or {}).items()
+    }
     return response
+
+
+CAPTCHA = "<html><script src='/_Incapsula_Resource?SWJIYLWA=1'></script></html>"
 
 
 class TestParseCredentials:
     """CSRF pair and street from a request copied from the browser."""
 
-    @pytest.mark.parametrize("text", [CURL_BASH, CURL_CMD, POWERSHELL])
-    def test_formats(self, text):
-        """Copy as cURL (bash, cmd) and Copy as PowerShell."""
+    @pytest.mark.parametrize(
+        ("text", "imperva"),
+        [
+            (CURL_BASH, {"visid_incap_1": "q"}),
+            (CURL_CMD, {"visid_incap_1": "q"}),
+            (POWERSHELL, {}),
+        ],
+    )
+    def test_formats(self, text, imperva):
+        """Copy as cURL (bash, cmd) and Copy as PowerShell; Imperva cookies are kept."""
         credentials, street = parse_credentials(text)
-        assert credentials == DtekCredentials(COOKIE, TOKEN)
+        assert credentials == DtekCredentials(COOKIE, TOKEN, imperva)
         assert street == STREET
+
+    def test_imperva_cookies(self):
+        """All Imperva cookies of the request, other cookies are skipped."""
+        text = (
+            f"curl 'https://www.dtek-kem.com.ua/ua/ajax' -b 'dtek-kem=x; "
+            f"visid_incap_2224657=AAA; incap_ses_788_2224657=BBB==; nlbi_2224657=CCC; "
+            f"_ga=GA1; _csrf-dtek-kem={COOKIE}' -H 'x-csrf-token: {TOKEN}'"
+        )
+        credentials, _ = parse_credentials(text)
+        assert credentials.imperva == {
+            "visid_incap_2224657": "AAA",
+            "incap_ses_788_2224657": "BBB==",
+            "nlbi_2224657": "CCC",
+        }
+        assert credentials.cookies()["_csrf-dtek-kem"] == COOKIE
+
+    def test_imperva_powershell(self):
+        """Imperva cookie added by Copy as PowerShell."""
+        text = POWERSHELL + (
+            "\n$session.Cookies.Add((New-Object System.Net.Cookie("
+            '"incap_ses_788_2224657", "SES", "/", ".dtek-kem.com.ua")))'
+        )
+        credentials, _ = parse_credentials(text)
+        assert credentials.imperva == {"incap_ses_788_2224657": "SES"}
 
     def test_cookie_header(self):
         """Cookie in a header, no body: no street."""
@@ -249,3 +287,67 @@ class TestDtekAddressApi:
         api = DtekAddressApi(STREET, "12", MagicMock())
         assert api.get_outage() is None
         assert api.get_updated_on() is None
+
+
+class TestCaptcha:
+    """Imperva captcha page: back-off, cookies, stale data."""
+
+    async def test_captcha_page_error(self):
+        """A captcha page is told apart from other errors."""
+        with patch("aiohttp.ClientSession.post") as mock_post:
+            mock_post.return_value.__aenter__.return_value = _response(200, CAPTCHA)
+            with pytest.raises(DtekAddressCaptchaError):
+                await fetch_street(STREET, DtekCredentials(COOKIE, TOKEN))
+
+    async def test_backoff_after_captcha(self, street_answer):
+        """After a captcha the next request is made in 30 minutes; success resets."""
+        api = DtekAddressApi(STREET, "12", DtekCredentials(COOKIE, TOKEN))
+        api.data = street_answer
+        now = datetime.datetime(2026, 10, 21, 12, 0, tzinfo=KYIV_TZ)
+        target = "custom_components.svitlo_kyiv.api.dtek_address.fetch_street"
+        with patch(
+            target, AsyncMock(side_effect=DtekAddressCaptchaError("x"))
+        ) as fetch:
+            await api.fetch_data(now)
+            assert api.captcha_since == now
+            assert api.retry_after == now + datetime.timedelta(minutes=30)
+            await api.fetch_data(now + datetime.timedelta(minutes=15))
+            assert fetch.await_count == 1  # waits for retry_after
+            await api.fetch_data(now + datetime.timedelta(minutes=31))
+            assert fetch.await_count == 2
+            assert api.captcha_since == now  # the episode goes on
+        assert api.data == street_answer  # the last answer is kept
+        later = now + datetime.timedelta(hours=1, minutes=5)
+        with patch(target, AsyncMock(return_value=street_answer)):
+            await api.fetch_data(later)
+        assert api.captcha_since is None
+        assert api.retry_after is None
+        assert api.last_success == later
+
+    async def test_new_imperva_cookies_kept(self, street_answer):
+        """Imperva cookies set by the website are used by the next requests."""
+        api = DtekAddressApi(
+            STREET, "12", DtekCredentials(COOKIE, TOKEN, {"visid_incap_1": "old"})
+        )
+        with patch("aiohttp.ClientSession.post") as mock_post:
+            mock_post.return_value.__aenter__.return_value = _response(
+                200,
+                json.dumps(street_answer),
+                {"incap_ses_1_1": "new", "dtek-kem": "skip"},
+            )
+            await api.fetch_data()
+        assert api.credentials.imperva == {
+            "visid_incap_1": "old",
+            "incap_ses_1_1": "new",
+        }
+
+    def test_stale(self, street_answer):
+        """Without a successful answer for 2 hours the data is stale."""
+        api = DtekAddressApi(STREET, "12", DtekCredentials(COOKIE, TOKEN))
+        now = datetime.datetime(2026, 10, 21, 12, 0, tzinfo=KYIV_TZ)
+        assert not api.is_stale(now)  # no data yet: not stale, just unknown
+        api.data = street_answer
+        api.last_success = now - datetime.timedelta(hours=1)
+        assert not api.is_stale(now)
+        api.last_success = now - datetime.timedelta(hours=2, minutes=1)
+        assert api.is_stale(now)

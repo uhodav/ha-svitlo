@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.util import dt as dt_utils
 
-from .const import CONF_CSRF_COOKIE, CONF_CSRF_TOKEN
+from .const import CONF_CSRF_COOKIE, CONF_CSRF_TOKEN, CONF_IMPERVA_COOKIES
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from .coordinator.yasno import YasnoCoordinator
 
 # The CSRF pair of the DTEK website works like a password
-TO_REDACT = {CONF_CSRF_COOKIE, CONF_CSRF_TOKEN}
+TO_REDACT = {CONF_CSRF_COOKIE, CONF_CSRF_TOKEN, CONF_IMPERVA_COOKIES}
 
 
 async def async_get_config_entry_diagnostics(
@@ -58,6 +58,10 @@ async def async_get_config_entry_diagnostics(
             "street": address.street,
             "house": address.house,
             "auth_failed": coordinator.address_auth_failed,
+            "stale": coordinator.address_stale,
+            "captcha_since": address.captcha_since,
+            "next_request": address.retry_after,
+            "imperva_cookies": sorted(address.credentials.imperva),
             "last_success": address.last_success,
             "updated_on": address.get_updated_on(),
             "house_data": address.house_data,
