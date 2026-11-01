@@ -44,6 +44,7 @@ from ..models import (
     ConnectivityState,
     PlannedOutageEvent,
     PlannedOutageEventType,
+    YasnoPlannedOutageDayStatus,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -198,13 +199,18 @@ class YasnoCoordinator(DataUpdateCoordinator):
         # Resolve IDs if not already resolved
         if self.region_id is None or self.provider_id is None:
             await self._resolve_ids()
+            if self.provider_id is None:
+                LOGGER.warning(
+                    "Yasno provider %s of %s not found: only the DTEK website copy",
+                    self.provider,
+                    self.region,
+                )
 
-            # Update API with resolved IDs
-            self.api = YasnoApi(
-                region_id=self.region_id,
-                provider_id=self.provider_id,
-                group=self.group,
-            )
+            # Update the API with resolved IDs; the same object keeps the known
+            # slots and the second source between attempts
+            self.api.region_id = self.region_id
+            self.api.provider_id = self.provider_id
+            self.api.group = self.group
 
         # Fetch outages data (now async with aiohttp, not blocking)
 
@@ -346,7 +352,7 @@ class YasnoCoordinator(DataUpdateCoordinator):
 
     async def _track_schedule_change(self) -> None:
         """Remember when the planned outages of today and later changed."""
-        if self.api._get_group_data() is None:  # noqa: SLF001
+        if not self.api.has_data():
             return  # no data yet - nothing to compare
         today = dt_utils.now().date()
         schedule = self.api.get_schedule_by_day(today)
@@ -420,9 +426,8 @@ class YasnoCoordinator(DataUpdateCoordinator):
             None: No data available or error
 
         """
-        # First check if we have any data at all
-        group_data = self._get_group_data_or_none()
-        if not group_data:
+        # First check if we have any data at all (Yasno or the second source)
+        if not self._has_data():
             return None  # No data available - unknown
 
         # We have data, check for outages
@@ -439,9 +444,9 @@ class YasnoCoordinator(DataUpdateCoordinator):
     @property
     def current_day_status(self) -> str | None:
         """Get the status of the current day."""
-        group_data = self._get_group_data_or_none()
-        if not group_data:
+        if not self._has_data():
             return None
+        group_data = self._get_group_data_or_none() or {}
 
         now = dt_utils.now()
         current_date = now.date()
@@ -469,14 +474,17 @@ class YasnoCoordinator(DataUpdateCoordinator):
             # If there's a current outage but no status found, it might be emergency
             return "EmergencyShutdowns"
 
+        # Only the second source has the day: its schedule applies
+        if current_date.isoformat() in self.api.alt_days:
+            return YasnoPlannedOutageDayStatus.STATUS_SCHEDULE_APPLIES.value
+
         return None
 
     @property
     def next_outage_type(self) -> str | None:
         """Get the type of the next planned outage."""
-        # Check if we have data
-        group_data = self._get_group_data_or_none()
-        if not group_data:
+        # Check if we have data (Yasno or the second source)
+        if not self._has_data():
             return None  # No data available - show "Невідомо"
 
         # We have data, check for next outage
@@ -489,12 +497,15 @@ class YasnoCoordinator(DataUpdateCoordinator):
 
     def _has_outages_planned(self) -> bool:
         """Check if there are any outages planned."""
-        group_data = self._get_group_data_or_none()
-        if not group_data:
+        if not self._has_data():
             return False
 
         event = self._get_next_event_of_type(ConnectivityState.STATE_PLANNED_OUTAGE)
         return event is not None
+
+    def _has_data(self) -> bool:
+        """Return whether Yasno or the second source gave a schedule."""
+        return bool(self._get_group_data_or_none() or self.api.alt_days)
 
     def _get_group_data_or_none(self):
         """

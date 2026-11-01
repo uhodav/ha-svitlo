@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import re
 
 import aiohttp
 from aiohttp.client_exceptions import ClientConnectorDNSError
@@ -22,6 +23,15 @@ from ..models import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+# Legal form at the start of a provider name: ПРАТ, ПАТ, АТ, ТОВ, ПП
+_LEGAL_FORM_RE = re.compile(r"^(?:прат|пат|ат|тов|пп)\s+", re.IGNORECASE)
+
+
+def _provider_key(name: str) -> str:
+    """Provider name without the legal form and quotes, for comparing."""
+    name = _LEGAL_FORM_RE.sub("", name.strip())
+    return " ".join(re.sub(r"[«»\"'“”„]", "", name).split()).casefold()
 
 
 def _minutes_to_time(minutes: int, dt: datetime.datetime) -> datetime.datetime:
@@ -242,11 +252,24 @@ class YasnoApi:
     def get_yasno_provider_by_name(
         self, region_name: str, provider_name: str
     ) -> dict | None:
-        """Get provider data by region and provider name."""
+        """
+        Get provider data by region and provider name.
+
+        Yasno renames providers (ПРАТ «ДТЕК ...» -> ТОВ «ДТЕК ...»): without an exact
+        match the name is compared without the legal form, then the only provider
+        of the region is taken.
+        """
         providers = self.get_yasno_providers_for_region(region_name)
         for provider in providers:
             if provider["name"] == provider_name:
                 return provider
+
+        wanted = _provider_key(provider_name)
+        for provider in providers:
+            if _provider_key(provider["name"]) == wanted:
+                return provider
+        if len(providers) == 1:
+            return providers[0]
 
         return None
 
@@ -311,6 +334,10 @@ class YasnoApi:
             return None
 
         return self.planned_outage_data[self.group]
+
+    def has_data(self) -> bool:
+        """Return whether any source (Yasno or the second one) gave a schedule."""
+        return bool(self._get_group_data() or self.alt_days)
 
     def get_updated_on(self) -> datetime.datetime | None:
         """When the schedule in use was updated (the latest of the sources)."""
@@ -383,8 +410,9 @@ class YasnoApi:
         self, start_date: datetime.datetime, end_date: datetime.datetime
     ) -> list[PlannedOutageEvent]:
         """Get all events within the date range."""
-        group_data = self._get_group_data()
-        if not group_data:
+        # Without Yasno data the second source still gives the schedule
+        group_data = self._get_group_data() or {}
+        if not group_data and not self.alt_days:
             return []
 
         LOGGER.debug("Group data for %s: %s", self.group, group_data)

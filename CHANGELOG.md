@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.1
+
+The Yasno provider of Kyiv was renamed (ПРАТ «ДТЕК КИЇВСЬКІ ЕЛЕКТРОМЕРЕЖІ» -> ТОВ «ДТЕК КИЇВСЬКІ ЕЛЕКТРОМЕРЕЖІ»): the integration did not find it and stopped getting the schedule.
+
+- The provider is found without the legal form in its name (ПРАТ, ТОВ, ...); a region with one provider takes it.
+- Without Yasno data the schedule of the DTEK website copy is used: the sensors and the calendar are not `unknown`.
+- While the provider is not found, the last known schedule and the second source are kept between attempts.
+
 ## 0.8.0
 
 The DTEK website (Imperva) started to answer the address request with a captcha page from time to time.
