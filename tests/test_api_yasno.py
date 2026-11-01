@@ -202,9 +202,27 @@ class TestYasnoApiRegions:
         assert provider["id"] == TEST_PROVIDER_ID
 
     def test_get_provider_by_name_not_found(self, api, regions_data):
-        """Test getting non-existent provider."""
+        """Test getting non-existent provider of a region with several ones."""
         api.regions_data = regions_data
-        assert api.get_yasno_provider_by_name("Київ", "Unknown") is None
+        assert api.get_yasno_provider_by_name("Дніпро", "Unknown") is None
+        assert api.get_yasno_provider_by_name("Unknown", "ДнЕМ") is None
+
+    def test_get_provider_renamed(self, api, regions_data):
+        """The legal form of the provider changed: ПРАТ -> ТОВ."""
+        regions_data[0]["dsos"][0]["name"] = "ТОВ «ДТЕК КИЇВСЬКІ ЕЛЕКТРОМЕРЕЖІ»"
+        regions_data[1]["dsos"][0]["name"] = "ТОВ «ДнЕМ»"
+        api.regions_data = regions_data
+        provider = api.get_yasno_provider_by_name(
+            "Київ", "ПРАТ «ДТЕК КИЇВСЬКІ ЕЛЕКТРОМЕРЕЖІ»"
+        )
+        assert provider["id"] == TEST_PROVIDER_ID
+        assert api.get_yasno_provider_by_name("Дніпро", "ДнЕМ")["id"] == 301
+
+    def test_get_provider_only_one_in_region(self, api, regions_data):
+        """The only provider of the region is taken when the name changed."""
+        api.regions_data = regions_data
+        provider = api.get_yasno_provider_by_name("Київ", "Old name")
+        assert provider["id"] == TEST_PROVIDER_ID
 
 
 class TestYasnoApiGroups:

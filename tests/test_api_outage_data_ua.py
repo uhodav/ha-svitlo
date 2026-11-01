@@ -186,6 +186,24 @@ class TestSourceSelection:
             ("10 18:00", "21:30"),
         ]
 
+    def test_without_yasno_data(self, api):
+        """Yasno gave nothing (provider not found): the DTEK schedule works."""
+        assert api.planned_outage_data is None
+        assert api.has_data()
+        assert _definite(api.get_events(*self._day())) == [
+            ("10 00:00", "00:30"),
+            ("10 18:00", "21:30"),
+        ]
+        assert api.get_schedule_by_day(datetime.date(2026, 10, 10)) == {
+            "2026-10-10": ["00:00-00:30", "18:00-21:30"]
+        }
+
+    def test_no_data_at_all(self):
+        """Neither source: no data, no events."""
+        api = YasnoApi(region_id=25, provider_id=None, group=GROUP)
+        assert not api.has_data()
+        assert api.get_events(*self._day()) == []
+
     def test_updated_on_is_latest(self, api):
         """Schedule Updated On shows the latest of the sources."""
         api.planned_outage_data = _yasno("ScheduleApplies", [])
